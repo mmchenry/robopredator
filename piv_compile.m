@@ -1,4 +1,4 @@
-function d = piv_compile(d_path)
+function piv_compile(d_path)
 % Imports piv data for each speed and dumps it into individual data files
 
 %% Parameters
@@ -16,6 +16,13 @@ fr_size = 1024;
 
 % Size in pixels of header at top of video frames
 yOffset = 48;
+
+% Bounds and number of points for uniform grid
+x_num = 60;
+x_min = -0.6;
+x_max = 1.6;
+y_min = -.4;
+y_max = 1.8;
 
 
 %% Check directories
@@ -144,8 +151,15 @@ S_L = [xAxis' yAxis' zAxis'];
 clear xAxis yAxis zAxis
 
 
-%% Load & organize data
+%% Organize dorso-ventral data
 
+
+% Define common coordinate values wrt predator with cm & cm/s units
+xVals = linspace(x_min,x_max,x_num)';
+dVals = mean(diff(xVals));
+yVals = [y_min:dVals:y_max]';
+
+clear dVals x_min y_min x_max y_max
 
 % Loop through speeds
 for i = 1:length(spds)
@@ -154,12 +168,11 @@ for i = 1:length(spds)
     str_spd = ['0' num2str(spds(i))];
     str_spd = str_spd(end-1:end);
     
-    % Initialize vectors to store data
-    x = []; y = []; z = [];
-    u = []; v = []; w = [];
-    
+    % Initialize index for z values
+    z_idx = 1;
+ 
     % Load VENTRAL data at all positions ----------------------------------
-    for j = 1:length(cal.V.position)
+    for j = length(cal.V.position):-1:1
         
         % Calibration constant
         conv_ratio = cal.V.conv_ratio(j);
@@ -191,24 +204,35 @@ for i = 1:length(spds)
             
         % Rotate coordinates into global FOR
         coord_gbl = [inv(S_V)'*coord_vid']';
-        vel_gbl   = [inv(S_V)'*vel_vid']';
+        vel_gbl   = [inv(S_V)'*vel_vid']'; 
         
-        % Translate coordinates along z-axis wrt global origin
-        coord_gbl(:,3) = coord_gbl(:,3) + slice_pos;
+        % Define current transformed coordinates
+        x_c = coord_gbl(:,1);
+        y_c = coord_gbl(:,2);
+        u_c = vel_gbl(:,1);
+        v_c = vel_gbl(:,2);
         
+        % Meshgrid and interpolate the transformed data
+        [x_c,y_c,u_c,v_c] = mesh_interp(x_c,y_c,u_c,v_c,xVals,yVals);
+
         % Define coordinates in the fish FOR
-        x   = [x; coord_gbl(:,1)];
-        y   = [y; coord_gbl(:,2)];
-        z   = [z; coord_gbl(:,3)];
+        x(:,:,z_idx)   = x_c;
+        y(:,:,z_idx)   = y_c;
+        z(z_idx)       = slice_pos;
         
         % Define velocity components in fish FOR
-        u   = [u; vel_gbl(:,1)];
-        v   = [v; vel_gbl(:,2)];
-        w   = [w; nan(length(vel_gbl),1)];   
+        u(:,:,z_idx)   = u_c;
+        v(:,:,z_idx)   = v_c; 
         
+        z_idx = z_idx + 1;
+ 
         clear conv_ratio predx predy predz str_depth f_name coord_gbl 
         clear coord_gbl vel_gbl coord_vid vel_vid C slice_pos
+        clear x_c y_c z_c u_c v_c w_c
     end
+    
+    clear j
+    
     
     % Load DORSAL data at all positions -----------------------------------
     for j = 1:length(cal.D.position)
@@ -248,19 +272,61 @@ for i = 1:length(spds)
         % Translate coordinates along z-axis wrt global origin
         coord_gbl(:,3) = coord_gbl(:,3) + slice_pos;
         
+        % Define current transformed coordinates
+        x_c = coord_gbl(:,1);
+        y_c = coord_gbl(:,2);
+        u_c = vel_gbl(:,1);
+        v_c = vel_gbl(:,2);
+        
+        % Meshgrid and interpolate the transformed data
+        [x_c,y_c,u_c,v_c] = mesh_interp(x_c,y_c,u_c,v_c,xVals,yVals);
+
         % Define coordinates in the fish FOR
-        x   = [x; coord_gbl(:,1)];
-        y   = [y; coord_gbl(:,2)];
-        z   = [z; coord_gbl(:,3)];
+        x(:,:,z_idx)   = x_c;
+        y(:,:,z_idx)   = y_c;
+        z(z_idx)   = slice_pos;
         
         % Define velocity components in fish FOR
-        u   = [u; vel_gbl(:,1)];
-        v   = [v; vel_gbl(:,2)];
-        w   = [w; nan(length(vel_gbl),1)];   
+        u(:,:,z_idx)   = u_c;
+        v(:,:,z_idx)   = v_c;
+        
+        z_idx = z_idx + 1; 
         
         clear conv_ratio predx predy predz str_depth f_name coord_gbl 
         clear coord_gbl vel_gbl coord_vid vel_vid C slice_pos
+        clear x_c y_c z_c u_c v_c w_c
     end
+    
+    % Store values. The x and y coords should be the same for all z.
+    p.spd = spds(i);
+    p.x = x(:,:,1);
+    p.y = y(:,:,1);
+    p.z = z;
+    p.u = u;
+    p.v = v;
+    p.w = nan;
+    
+    % Save data
+    save([d_path filesep 'compiled data' filesep 'DV view S' str_spd '_piv'],'p')
+    
+    clear X_tmp Y_tmp x y z u v z_idx str_spd j p
+    
+end
+
+clear i
+
+%% Organize lateral data
+
+
+% Initialize index for z values
+y_idx = 1;
+
+% Loop through speeds
+for i = 1:length(spds)
+    
+    % String that specifies speed
+    str_spd = ['0' num2str(spds(i))];
+    str_spd = str_spd(end-1:end);
         
     % Load RIGHT data at all positions ------------------------------------
     for j = 1:length(cal.R.position)
@@ -297,21 +363,29 @@ for i = 1:length(spds)
         coord_gbl = [inv(S_R)'*coord_vid']';
         vel_gbl   = [inv(S_R)'*vel_vid']';
         
-        % Translate coordinates along z-axis wrt global origin
-        coord_gbl(:,2) = coord_gbl(:,2) + slice_pos;
+        % Define current transformed coordinates
+        x_c = coord_gbl(:,1);
+        z_c = coord_gbl(:,3);
+        u_c = vel_gbl(:,1);
+        w_c = vel_gbl(:,3);
         
+        % Meshgrid and interpolate the transformed data
+        [x_c,z_c,u_c,w_c] = mesh_interp(x_c,z_c,u_c,w_c,xVals,yVals);
+
         % Define coordinates in the fish FOR
-        x   = [x; coord_gbl(:,1)];
-        y   = [y; coord_gbl(:,2)];
-        z   = [z; coord_gbl(:,3)];
+        x(:,y_idx,:)   = x_c;
+        y(y_idx)       = slice_pos;
+        z(:,y_idx,:)   = z_c;
         
         % Define velocity components in fish FOR
-        u   = [u; vel_gbl(:,1)];
-        v   = [v; nan(length(vel_gbl),1)];
-        w   = [w; vel_gbl(:,3)];   
+        u(:,:,y_idx)   = u_c;
+        w(:,:,y_idx)   = w_c;
+        
+        y_idx = y_idx + 1; 
         
         clear conv_ratio predx predy predz str_depth f_name coord_gbl 
         clear coord_gbl vel_gbl coord_vid vel_vid C slice_pos
+        clear x_c y_c z_c u_c v_c w_c
     end
     
     % Load LEFT data at all positions -------------------------------------
@@ -349,36 +423,123 @@ for i = 1:length(spds)
         coord_gbl = [inv(S_L)'*coord_vid']';
         vel_gbl   = [inv(S_L)'*vel_vid']';
         
-        % Translate coordinates along z-axis wrt global origin
-        coord_gbl(:,2) = coord_gbl(:,2) + slice_pos;
+        % Define current transformed coordinates
+        x_c = coord_gbl(:,1);
+        z_c = coord_gbl(:,3);
+        u_c = vel_gbl(:,1);
+        w_c = vel_gbl(:,3);
         
+        % Meshgrid and interpolate the transformed data
+        [x_c,z_c,u_c,w_c] = mesh_interp(x_c,z_c,u_c,w_c,xVals,yVals);
+
         % Define coordinates in the fish FOR
-        x   = [x; coord_gbl(:,1)];
-        y   = [y; coord_gbl(:,2)];
-        z   = [z; coord_gbl(:,3)];
+        x(:,y_idx,:)   = x_c;
+        y(y_idx)       = slice_pos;
+        z(:,y_idx,:)   = z_c;
         
         % Define velocity components in fish FOR
-        u   = [u; vel_gbl(:,1)];
-        v   = [v; nan(length(vel_gbl),1)];
-        w   = [w; vel_gbl(:,3)];   
+        u(:,:,y_idx)   = u_c;
+        w(:,:,y_idx)   = w_c;
+        
+        y_idx = y_idx + 1; 
         
         clear conv_ratio predx predy predz str_depth f_name coord_gbl 
         clear coord_gbl vel_gbl coord_vid vel_vid C slice_pos
+        clear x_c y_c z_c u_c v_c w_c
     end
      
-    % Store in 'p' structure
-    p.x = x;
-    p.y = y;
+    % Store values. The x and y coords should be the same for all z.
+    p.spd = spds(i);
+    p.x = x(:,1,:);
+    p.z = z(:,1,:);
     p.z = z;
     p.u = u;
-    p.v = v;
+    p.v = nan;
     p.w = w;
     
     % Save data
-    save([d_path filesep 'compiled data' filesep 'S' str_spd '_piv'],'p')
+    save([d_path filesep 'compiled data' filesep 'LR view S' str_spd '_piv'],'p')
     
-    % Clear for next iteration
-    clear x_vid y_vid z u_vid v w str_spd
+    clear X_tmp Y_tmp x y z u v z_idx str_spd j p
+    
+end
+
+
+function [X,Y,U,V] = mesh_interp(x,y,u,v,X_vals,Y_vals)
+% Interpolates and meshgrids the piv data
+
+% Indicies for the start of each row of x values, This assumes that no mask
+% occurs in on the left-hand side of the video frame
+i_rowstart = find(x == x(1));
+
+% Check that a row isn't getting added to another row, due to a left-hand
+% side mask
+if max(diff(i_rowstart)) > 1.3*mean(diff(i_rowstart))
+    warning(['This code assumes that no mask occurs on the left-hand ' ...
+             'side of the video frame.  Check that assumption'])
+end
+
+% Number of unique x and y values that repeat in a grid
+num_xvals = length(unique(x));
+num_yvals = length(i_rowstart);
+
+% New unique x & y values
+%X_vals = linspace(min(x),max(x),num_xvals*.75);
+%Y_vals = linspace(min(y),max(y),num_yvals*.75)';
+
+% Step through y-v
+for i = 1:num_yvals
+    
+    % Indicies for current row
+    if i==num_yvals
+        i_c = i_rowstart(i):length(x);
+    else
+        i_c = i_rowstart(i):(i_rowstart(i+1)-1);
+    end
+    
+    % Current values
+    x_c = x(i_c);
+    y_c = y(i_c);
+    u_c = interp1(x(i_c),u(i_c),X_vals);
+    v_c = interp1(x(i_c),v(i_c),X_vals);
+    
+    % Ditch nans (for interp1, below)
+    u_c(isnan(u_c)) = 0;
+    v_c(isnan(v_c)) = 0;
+    
+    % Interpolate y, u & v and store in current row
+    X1(i,1:length(X_vals)) = X_vals;
+    Y1(i,1:length(X_vals)) = X_vals.*0 + mean(y_c(~isnan(y_c)));
+    U1(i,1:length(X_vals)) = u_c;
+    V1(i,1:length(X_vals)) = v_c;
+    
+    clear i_c x_c y_c u_c v_c
+end
+
+clear i
+
+
+% Next, create even spacing along the y-values by interpolating along the 
+% y dimension at each x-coordinate
+for i = 1:size(X1,2)
+    
+    % Define new x and y coordiates
+    Y(:,i) = Y_vals;
+    X(:,i) = Y_vals.*0 + X1(1,i);
+    
+    % Define current u and v values
+    u_c = interp1(Y1(:,i),U1(:,i),Y_vals);
+    v_c = interp1(Y1(:,i),V1(:,i),Y_vals);
+    
+    % Replace nans with zeros
+    u_c(u_c==0) = nan;
+    v_c(v_c==0) = nan;
+    
+    % Store results
+    U(:,i) = u_c;
+    V(:,i) = v_c;
+    
+    clear u_c v_c
     
 end
 

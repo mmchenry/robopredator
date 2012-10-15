@@ -33,14 +33,14 @@ check_str(H,6,'u-in-stationary-rf');
 check_str(H,7,'y-velocity');
 check_str(H,8,'z-velocity');
 
-% Store data
+% Store data (in cm, cm/s)
 d.node = N{1};
-d.x    = N{2};
-d.y    = N{3};
-d.z    = N{4};
-d.u    = N{6};
-d.v    = N{7};
-d.w    = N{8};
+d.x    = N{2}.*100;
+d.y    = N{3}.*100;
+d.z    = N{4}.*100;
+d.u    = N{6}.*100;
+d.v    = N{7}.*100;
+d.w    = N{8}.*100;
 
 
 function check_str(H,i,str)
