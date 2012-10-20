@@ -16,7 +16,7 @@ N = textscan(fid, ...
     '%d %f %f %f %f %f %f %f','delimiter',',');
 
 % Close file identifier
-fclose(fid)
+fclose(fid);
 
 % Check size of structues
 if (length(H)~=8) || (length(N)~=8)

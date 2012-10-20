@@ -151,7 +151,7 @@ S_L = [xAxis' yAxis' zAxis'];
 clear xAxis yAxis zAxis
 
 
-%% Organize dorso-ventral data
+%% Organize dorso-ventral (DV) data
 
 
 % Define common coordinate values wrt predator with cm & cm/s units
@@ -315,11 +315,7 @@ end
 
 clear i
 
-%% Organize lateral data
-
-
-% Initialize index for z values
-y_idx = 1;
+%% Organize lateral (LR) data
 
 % Loop through speeds
 for i = 1:length(spds)
@@ -328,6 +324,9 @@ for i = 1:length(spds)
     str_spd = ['0' num2str(spds(i))];
     str_spd = str_spd(end-1:end);
         
+    % Initialize index for y values
+    y_idx = 1;
+    
     % Load RIGHT data at all positions ------------------------------------
     for j = 1:length(cal.R.position)
         
@@ -378,8 +377,8 @@ for i = 1:length(spds)
         z(:,y_idx,:)   = z_c;
         
         % Define velocity components in fish FOR
-        u(:,:,y_idx)   = u_c;
-        w(:,:,y_idx)   = w_c;
+        u(:,y_idx,:)   = u_c;
+        w(:,y_idx,:)   = w_c;
         
         y_idx = y_idx + 1; 
         
@@ -438,8 +437,8 @@ for i = 1:length(spds)
         z(:,y_idx,:)   = z_c;
         
         % Define velocity components in fish FOR
-        u(:,:,y_idx)   = u_c;
-        w(:,:,y_idx)   = w_c;
+        u(:,y_idx,:)   = u_c;
+        w(:,y_idx,:)   = w_c;
         
         y_idx = y_idx + 1; 
         
@@ -448,11 +447,11 @@ for i = 1:length(spds)
         clear x_c y_c z_c u_c v_c w_c
     end
      
-    % Store values. The x and y coords should be the same for all z.
+    % Store values. The x and z coords should be the same for all y.
     p.spd = spds(i);
     p.x = x(:,1,:);
     p.z = z(:,1,:);
-    p.z = z;
+    p.y = y;
     p.u = u;
     p.v = nan;
     p.w = w;
