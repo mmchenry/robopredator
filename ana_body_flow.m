@@ -1,5 +1,6 @@
 function ana_body_flow(root_path)
-% Analyzes the behavioral responses of larvae to flow stimuli
+% Analyzes the flow along the body of larvae from body position data in 
+% behavioral experiments and flow data from CFD simulations.
 %
 % root_path - the base directory that contains 'cfd' and 'behavior' directories 
 
@@ -12,6 +13,8 @@ latency = 5e-3;
 % Number of points along the body
 numPoints = 100;
 
+
+%TODO: Add latency to analysis
 
 %% Paths
 
@@ -30,15 +33,14 @@ cfd20_path  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat
 
 %% Set up variables
 
-
 % Flow speed
 f.spd      = nan(size(b.preyx,1),numPoints);
 
 % Velocity gradient along body
-f.vel_grad = nan(size(b.preyx,1),numPoints);
+f.velgrad = nan(size(b.preyx,1),numPoints);
 
 % Shear deformation
-f.shdef    = nan(size(b.preyx,1),numPoints);
+f.shrdef    = nan(size(b.preyx,1),numPoints);
 
 % Number of sequences
 num_seq = length(b.preyx(:,1));
@@ -50,19 +52,24 @@ num_seq = length(b.preyx(:,1));
 load(cfd2_path);
 
 % Index for 2 cm/s
-idx = find((b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) & ~isnan(b.preyx(:,1)));
+idx = find((b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
+           & ~isnan(b.preyx(:,1)));
 
 for i = 1:length(idx)
     
+    % Sequence number
     seqnum = idx(i);
+    
+    % Offset in x, due to latency
+    lat_offset = latency * 2;
  
     % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints);
+    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
     
     f.s(seqnum,:)        = flow.s;
     f.spd(seqnum,:)      = flow.spd;
-    f.shdef(seqnum,:)    = flow.sh_def;
-    f.vel_grad(seqnum,:) = flow.vel_grad;
+    f.shrdef(seqnum,:)   = flow.sh_def;
+    f.velgrad(seqnum,:)  = flow.vel_grad;
     
     %TODO: Store away results in fl_spd and fl_shdef
     
@@ -80,19 +87,24 @@ disp(' ');disp('Done 2 cm/s')
 load(cfd11_path);
 
 % Index for 11 cm/s
-idx = find((b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) & ~isnan(b.preyx(:,1)));
+idx = find((b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) ...
+           & ~isnan(b.preyx(:,1)));
 
 for i = 1:length(idx)
     
+    % Sequence number
     seqnum = idx(i);
+    
+    % Offset in x, due to latency
+    lat_offset = latency * 11;
  
     % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints);
+    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
     
     f.s(seqnum,:)        = flow.s;
     f.spd(seqnum,:)      = flow.spd;
-    f.shdef(seqnum,:)    = flow.sh_def;
-    f.vel_grad(seqnum,:) = flow.vel_grad;
+    f.shrdef(seqnum,:)   = flow.sh_def;
+    f.velgrad(seqnum,:)  = flow.vel_grad;
     
     %TODO: Store away results in fl_spd and fl_shdef
     
@@ -110,19 +122,24 @@ disp(' ');disp('Done 11 cm/s')
 load(cfd20_path);
 
 % Index for 2 cm/s
-idx = find((b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) & ~isnan(b.preyx(:,1)));
+idx = find((b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
+           & ~isnan(b.preyx(:,1)));
 
 for i = 1:length(idx)
     
+    % Sequence number
     seqnum = idx(i);
+    
+    % Offset in x, due to latency
+    lat_offset = latency * 20;
  
     % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints);
+    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
     
     f.s(seqnum,:)        = flow.s;
     f.spd(seqnum,:)      = flow.spd;
-    f.shdef(seqnum,:)    = flow.sh_def;
-    f.vel_grad(seqnum,:) = flow.vel_grad;
+    f.shrdef(seqnum,:)   = flow.sh_def;
+    f.velgrad(seqnum,:)  = flow.vel_grad;
     
     %TODO: Store away results in fl_spd and fl_shdef
     
@@ -136,11 +153,11 @@ disp(' ');disp('Done 20 cm/s')
 
 %% Save data
 
-save('flow_along_body.mat','f')
+save([root_path filesep 'behavior' filesep 'flow_along_body.mat'],'f')
 
 
 
-function out = interpflow(c,b,seqnum,numPoints)
+function out = interpflow(c,b,seqnum,numPoints,lat_offset)
 % Interpolates CFD flow field to find flow conditions at input coordinates
 % c - structure of CFD data
 % b - structure of 
@@ -191,14 +208,14 @@ s = [blength.*linspace(0,1,numPoints)]';
 bod = [s s.*0 s.*0] * inv(R);
 
 % Translate in inertial FOR
-bod_x = bod(:,1) + b_origin(1);
+bod_x = bod(:,1) + b_origin(1) + lat_offset;
 bod_y = bod(:,2) + b_origin(2);
 bod_z = bod(:,3) + b_origin(3);
 
 clear bod b_xaxis b_yaxis b_zaxis b_origin 
 
 % Mean position of body
-meanX = mean([b.preyx(seqnum,1) b.preyx(seqnum,3)]);
+meanX = mean([b.preyx(seqnum,1) b.preyx(seqnum,3)]) + lat_offset;
 meanY = mean([b.preyy(seqnum,1) b.preyy(seqnum,3)]);
 meanZ = mean([b.preyz(seqnum,1) b.preyz(seqnum,3)]);
 
