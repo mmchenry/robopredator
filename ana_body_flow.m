@@ -210,15 +210,15 @@ b_zaxis = cross(b_xaxis,b_yaxis);
 b_zaxis = b_zaxis./norm(b_zaxis);
 
 %Create rotation matrix (from inertial axes to local axes)
-% [x y z] * R       - inertial to local
-% [x y z] * inv(R)  - local to inertial
+% R * [x y z]       - inertial to local
+% inv(R) * [x y z]  - local to inertial
 R = [b_xaxis' b_yaxis' b_zaxis'];
 
 % Body position values
 s = [blength.*linspace(0,1,numPoints)]';
 
 % Body position rotated in inertial FOR
-bod = [s s.*0 s.*0] * inv(R);
+bod = inv(R) * [s s.*0 s.*0];
 
 % Translate in inertial FOR
 bod_x = bod(:,1) + b_origin(1) + lat_offset;
@@ -267,9 +267,9 @@ warning on
 % Calculate flow in local FOR
 for j = 1:numPoints
     %Convert velocity gradient into local coordinate system
-    new_dV = [du_dx(j) du_dy(j) du_dz(j);...
+    new_dV = R * [du_dx(j) du_dy(j) du_dz(j);...
               dv_dx(j) dv_dy(j) dv_dz(j);...
-              dw_dx(j) dw_dy(j) dw_dz(j)] * R;
+              dw_dx(j) dw_dy(j) dw_dz(j)];
     new_du_dx = new_dV(1,1);
     new_du_dy = new_dV(1,2);
     new_du_dz = new_dV(1,3);
@@ -298,10 +298,10 @@ out.bod_x = bod_x;
 out.bod_y = bod_y;
 out.bod_z = bod_z;
 
-% 
-% % Shear deformation (in inertial FOR)
-% out.sh_def =  (2*(out(1).du_dx).^2 + 2*(out(1).dv_dy).^2 ...
-%               + 2*(out(1).dw_dz).^2 + (out(1).du_dy+out(1).dv_dx).^2 ...
-%               + (out(1).du_dz+out(1).dw_dx).^2 + (out(1).dv_dz+out(1).dw_dy).^2).^0.5;
+
+% Shear deformation (in inertial FOR)
+out.sh_def =  (2*(out(1).du_dx).^2 + 2*(out(1).dv_dy).^2 ...
+              + 2*(out(1).dw_dz).^2 + (out(1).du_dy+out(1).dv_dx).^2 ...
+              + (out(1).du_dz+out(1).dw_dx).^2 + (out(1).dv_dz+out(1).dw_dy).^2).^0.5;
           
 
