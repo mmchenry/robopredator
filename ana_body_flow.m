@@ -14,8 +14,6 @@ latency = 5e-3;
 numPoints = 100;
 
 
-%TODO: Add latency to analysis
-
 %% Paths
 
 if nargin < 1
@@ -33,6 +31,9 @@ cfd20_path  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat
 
 %% Set up variables
 
+% Store latency assumed in the analysis
+f.latency = latency;
+
 % Flow speed
 f.spd      = nan(size(b.preyx,1),numPoints);
 
@@ -41,6 +42,14 @@ f.velgrad = nan(size(b.preyx,1),numPoints);
 
 % Shear deformation
 f.shrdef    = nan(size(b.preyx,1),numPoints);
+
+% Body position (arclength)
+f.s         = nan(size(b.preyx,1),numPoints);
+
+% Body position (inertial FOR)
+f.xbod      = nan(size(b.preyx,1),numPoints);
+f.ybod      = nan(size(b.preyx,1),numPoints);
+f.zbod      = nan(size(b.preyx,1),numPoints);
 
 % Number of sequences
 num_seq = length(b.preyx(:,1));
@@ -53,7 +62,7 @@ load(cfd2_path);
 
 % Index for 2 cm/s
 idx = find((b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)));
+           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
 
 for i = 1:length(idx)
     
@@ -66,12 +75,14 @@ for i = 1:length(idx)
     % Find flow conditions
     flow = interpflow(c,b,seqnum,numPoints,lat_offset);
     
+    % Store results
     f.s(seqnum,:)        = flow.s;
     f.spd(seqnum,:)      = flow.spd;
     f.shrdef(seqnum,:)   = flow.sh_def;
     f.velgrad(seqnum,:)  = flow.vel_grad;
-    
-    %TODO: Store away results in fl_spd and fl_shdef
+    f.xbod(seqnum,:)     = flow.bod_x;
+    f.ybod(seqnum,:)     = flow.bod_y;
+    f.zbod(seqnum,:)     = flow.bod_z;
     
     clear flow x_vals y_vals z_vals seqnum
 end
@@ -88,7 +99,7 @@ load(cfd11_path);
 
 % Index for 11 cm/s
 idx = find((b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)));
+           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
 
 for i = 1:length(idx)
     
@@ -105,8 +116,9 @@ for i = 1:length(idx)
     f.spd(seqnum,:)      = flow.spd;
     f.shrdef(seqnum,:)   = flow.sh_def;
     f.velgrad(seqnum,:)  = flow.vel_grad;
-    
-    %TODO: Store away results in fl_spd and fl_shdef
+    f.xbod(seqnum,:)     = flow.bod_x;
+    f.ybod(seqnum,:)     = flow.bod_y;
+    f.zbod(seqnum,:)     = flow.bod_z;
     
     clear flow x_vals y_vals z_vals seqnum
 end
@@ -123,7 +135,7 @@ load(cfd20_path);
 
 % Index for 2 cm/s
 idx = find((b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)));
+           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
 
 for i = 1:length(idx)
     
@@ -140,8 +152,9 @@ for i = 1:length(idx)
     f.spd(seqnum,:)      = flow.spd;
     f.shrdef(seqnum,:)   = flow.sh_def;
     f.velgrad(seqnum,:)  = flow.vel_grad;
-    
-    %TODO: Store away results in fl_spd and fl_shdef
+    f.xbod(seqnum,:)     = flow.bod_x;
+    f.ybod(seqnum,:)     = flow.bod_y;
+    f.zbod(seqnum,:)     = flow.bod_z;
     
     clear flow x_vals y_vals z_vals seqnum
 end
@@ -277,8 +290,13 @@ end
 % Flow speed
 out.spd = sqrt(u.^2 + v.^2 + w.^2)';
 
-% Body position values
+% Body position values (arclength)
 out.s = s;
+
+% Inertial FOR body coorindates
+out.bod_x = bod_x;
+out.bod_y = bod_y;
+out.bod_z = bod_z;
 
 % 
 % % Shear deformation (in inertial FOR)
