@@ -1,6 +1,8 @@
 function ana_body_flow(root_path)
 % Analyzes the flow along the body of larvae from body position data in 
 % behavioral experiments and flow data from CFD simulations.
+% The results are saved in the file 'flow_along_body.mat', which is used by
+% 'ana_all.m' to synthesize the results.
 %
 % root_path - the base directory that contains 'cfd' and 'behavior' directories 
 
@@ -218,7 +220,7 @@ R = [b_xaxis' b_yaxis' b_zaxis'];
 s = [blength.*linspace(0,1,numPoints)]';
 
 % Body position rotated in inertial FOR
-bod = inv(R) * [s s.*0 s.*0];
+bod = [inv(R) * [s s.*0 s.*0]']';
 
 % Translate in inertial FOR
 bod_x = bod(:,1) + b_origin(1) + lat_offset;
@@ -300,8 +302,8 @@ out.bod_z = bod_z;
 
 
 % Shear deformation (in inertial FOR)
-out.sh_def =  (2*(out(1).du_dx).^2 + 2*(out(1).dv_dy).^2 ...
-              + 2*(out(1).dw_dz).^2 + (out(1).du_dy+out(1).dv_dx).^2 ...
-              + (out(1).du_dz+out(1).dw_dx).^2 + (out(1).dv_dz+out(1).dw_dy).^2).^0.5;
+out.sh_def =  (2*(du_dx).^2 + 2*(dv_dy).^2 ...
+              + 2*(dw_dz).^2 + (du_dy+dv_dx).^2 ...
+              + (du_dz+dw_dx).^2 + (dv_dz+dw_dy).^2).^0.5;
           
 
