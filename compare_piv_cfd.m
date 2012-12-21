@@ -1,7 +1,7 @@
 function compare_piv_cfd(root)
 % Relates cfd data to piv data for a particular predator speed
 % 
-% Note that the cfd data are massive.  We therefore makes crop the
+% Note that the cfd data are massive.  We therefore crop the
 % data prior to analysis
 
 % Speeds of predator approach to compare
@@ -333,7 +333,7 @@ end
 load(piv_path)
 
 % Load cfd velocity data ('C')
-c = cfd_import_vel(cfd_path);
+c = cfd_import_vel(cfd_path,'full');
 
 % Index that defines domain covered by piv data
 i_piv = (c.x>min(p.x(:))*scl_fctr) & (c.x<max(p.x(:))*scl_fctr) & ...

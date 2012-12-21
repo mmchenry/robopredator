@@ -6,11 +6,23 @@ function ana_all(root_path)
 
 %% Parameters
 
+% Create boxplots of each parameter that could serve as a cue
+show_boxplots = 1;
 
+% Plots 3D volumes of flow field and responses
+show_3D = 1;
+
+% Modeled threshold of shearing for a response
 sh_thresh = .5;
-spd_thresh = .1;
-COM_pos = .75;
 
+% Modeled threshold of speed
+spd_thresh = .1;
+
+% Relative position of COM along length of the body (this is Matt's guess)
+COM_pos = .25;
+
+% Alpha transparency for the isosurface plots
+alpha_val = .6;
 
 
 %% Paths
@@ -18,11 +30,6 @@ COM_pos = .75;
 if nargin < 1
     root_path = uigetdir(pwd,'Select root directory (holds "cfd" & "behavior")');
 end
-
-% Paths to CFD data
-% cfd2_path   = [root_path filesep 'cfd' filesep 'flow_02cmps_around_zebrafish.mat'];
-% cfd11_path  = [root_path filesep 'cfd' filesep 'flow_11cmps_around_zebrafish.mat'];
-% cfd20_path  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat'];
 
 % Paths to CFD data arranged in regular grid
 cfd_path{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_reggrid.mat'];
@@ -41,6 +48,9 @@ load([root_path filesep 'behavior' filesep 'Transformed_Prey_Coords.mat'])
 % Number of sequences
 num_seq = length(b.preyx(:,1));
 
+% Values of speeds
+spds = [2 11 20];
+
 % Indices for each speed of sequences in the dark, with lateral line intact
 i2 = (b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
      & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0);
@@ -55,32 +65,34 @@ i20 = (b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
 groups = [b.speed(i2); b.speed(i11); b.speed(i20)];
 
 
-%% Response distance
+%% Response distance boxplots
 
-% Distance of each of the three body points
-dist1 = sqrt( b.preyx(:,1).^2 + b.preyy(:,1).^2 + b.preyz(:,1).^2 );
-dist2 = sqrt( b.preyx(:,2).^2 + b.preyy(:,2).^2 + b.preyz(:,2).^2 );
-dist3 = sqrt( b.preyx(:,3).^2 + b.preyy(:,3).^2 + b.preyz(:,3).^2 );
- 
-% Use minimum distance as the response distance
-resp_dist = min([dist1 dist2 dist3],[],2);
 
-% Max speed along body for each speed 
-max_bod_spd =  [max(f.spd(i2,:),[],2); ...
-                max(f.spd(i11,:),[],2); ...
-                max(f.spd(i20,:),[],2)];
-            
-% Max velocity gradient along body for each speed 
-max_velgrad =  [max(abs(f.velgrad(i2,:)),[],2); ...
-                max(abs(f.velgrad(i11,:)),[],2); ...
-                max(abs(f.velgrad(i20,:)),[],2)];
- 
-% Max shearing along body for each speed 
-max_shear   =  [max(f.shrdef(i2,:),[],2); ...
-                max(f.shrdef(i11,:),[],2); ...
-                max(f.shrdef(i20,:),[],2)];
-if 1
-            
+if show_boxplots
+    
+    % Distance of each of the three body points
+    dist1 = sqrt( b.preyx(:,1).^2 + b.preyy(:,1).^2 + b.preyz(:,1).^2 );
+    dist2 = sqrt( b.preyx(:,2).^2 + b.preyy(:,2).^2 + b.preyz(:,2).^2 );
+    dist3 = sqrt( b.preyx(:,3).^2 + b.preyy(:,3).^2 + b.preyz(:,3).^2 );
+    
+    % Use minimum distance as the response distance
+    resp_dist = min([dist1 dist2 dist3],[],2);
+    
+    % Max speed along body for each speed
+    max_bod_spd =  [max(f.spd(i2,:),[],2); ...
+        max(f.spd(i11,:),[],2); ...
+        max(f.spd(i20,:),[],2)];
+    
+    % Max velocity gradient along body for each speed
+    max_velgrad =  [max(abs(f.velgrad(i2,:)),[],2); ...
+        max(abs(f.velgrad(i11,:)),[],2); ...
+        max(abs(f.velgrad(i20,:)),[],2)];
+    
+    % Max shearing along body for each speed
+    max_shear   =  [max(f.shrdef(i2,:),[],2); ...
+        max(f.shrdef(i11,:),[],2); ...
+        max(f.shrdef(i20,:),[],2)];
+    
     % Boxplots
     figure;
     
@@ -97,195 +109,80 @@ if 1
     subplot(2,2,3)
     boxplot(max_shear, groups)
     xlabel('speed (cm/s)')
-    ylabel('max shear deformation along body')
-
+    ylabel('max shear deformation along body')  
+    
+    clear dist1 dist2 dist3 resp_dist max_bod_spd max_velgrad max_shear
 end
-
-
-return
 
 
 %% Plot spatial distibution of responders
 
+if show_3D  
+    
+    for i = 1:3
+        
+        % New Figure window
+        figure
+        
+        % Load CFD data in 'cR' strcuture
+        load(cfd_path{i})
+        
+        % 3D plot of speed and resposes -----------------------------------
+        
+        % Plot of position at response
+        subplot(1,2,1)
+        plot_prey_pos(f,i2)
+        hold on
+        title(['Speed (' num2str(spds(i)) ' cm/s)'])
+        xlims = xlim;
+        ylims = ylim;
+        zlims = zlim;
+        
+        hold on
+        
+        % Isosurface
+        p = patch(isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh));
+        isonormals(cR.x,cR.y,cR.z,cR.spd,p)
+        set(p,'FaceColor','red','EdgeColor','none');
+        daspect([1,1,1])
+        %view(3);
+        axis tight
+        camlight
+        lighting gouraud
+        alpha(p,alpha_val)
+        
+        hold off
+        
+        % 3D plot of shearing and resposes --------------------------------
+        
+        % Plot of position at response
+        subplot(1,2,2)
+        plot_prey_pos(f,i2)
+        hold on
+        title(['Shear deformation (' num2str(spds(i)) ' cm/s)'])
+        xlims = xlim;
+        ylims = ylim;
+        zlims = zlim; 
+        
+        hold on
+        
+        % Isosurface
+        p = patch(isosurface(cR.x,cR.y,cR.z,smooth3(cR.sh_def),sh_thresh));
+        isonormals(cR.x,cR.y,cR.z,cR.sh_def,p)
+        set(p,'FaceColor','red','EdgeColor','none');
+        daspect([1,1,1])
+        %view(3);
+        axis tight
+        camlight
+        lighting gouraud
+        alpha(p,alpha_val)
+        
+        hold off
+        
+    end   
+    
+end
 
-spd_thresh = .1;
-sh_thresh = .5;
-
-alpha_val = .6;
-
-load(cfd_path{1})
-
-figure
-
-%subplot(1,3,3)
-subplot(1,2,1)
-plot_prey_pos(f,i2)
-hold on
-title('Speed (2 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.spd,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-subplot(1,2,2)
-plot_prey_pos(f,i2)
-hold on
-title('Shear deformation (2 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,smooth3(cR.sh_def),sh_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.sh_def,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-load(cfd_path{2})
-
-figure
-
-%subplot(1,3,3)
-subplot(1,2,1)
-plot_prey_pos(f,i11)
-hold on
-title('Speed (11 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,cR.spd,spd_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.spd,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-subplot(1,2,2)
-plot_prey_pos(f,i11)
-hold on
-title('Shear deformation (11 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,cR.sh_def,sh_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.sh_def,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-load(cfd_path{3})
-
-figure
-
-%subplot(1,3,3)
-subplot(1,2,1)
-plot_prey_pos(f,i20)
-hold on
-title('Speed (20 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,cR.spd,spd_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.spd,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-subplot(1,2,2)
-plot_prey_pos(f,i20)
-hold on
-title('Shear deformation (20 cm/s)')
-xlims = xlim;
-ylims = ylim;
-zlims = zlim;
-
-
-hold on
-
-p = patch(isosurface(cR.x,cR.y,cR.z,cR.sh_def,sh_thresh));
-isonormals(cR.x,cR.y,cR.z,cR.sh_def,p)
-set(p,'FaceColor','red','EdgeColor','none');
-daspect([1,1,1])
-%view(3); 
-axis tight
-camlight 
-lighting gouraud
-alpha(p,alpha_val)
-
-hold off
-
-
-
-
-
-
-% 
-% subplot(1,3,1)
-% plot_prey_pos(f,i2)
-% title('2 cm/s')
-% xlim(xlims);ylim(ylims);zlim(zlims)
-% 
-% subplot(1,3,2)
-% plot_prey_pos(f,i11)
-% title('11 cm/s')
-% xlim(xlims);ylim(ylims);zlim(zlims)
 
 
 
