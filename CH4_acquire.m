@@ -1,4 +1,6 @@
-function CH4_acquire
+function CH4_acquire(root_path)
+% Acquires 3D coordinates for predator and prey in robopredator experiments
+%
 %a = raw untransformed coords of prey and pred nose in pixels
 %a.preyx    [mouthtip COM  tailtip]
 %a.preyy
@@ -17,24 +19,9 @@ function CH4_acquire
 %f.Rdist    response distance of prey
 
 
+%% Code execution
 
-%location of data files on dropbox
-
-
-
-warning off all;
-clear;
-
-
-path = '/Users/WilliamStewart/Dropbox/Robopredator/behavior';
-
-%location of raw videos
-vidlocation = '/Volumes/RED/Ch4 Data';
-
-
-
-
-
+% Interactive mode to select coordinates
 CollectData         = 1;
 
 %gets raw pixel locations of animals in x,y,z coords
@@ -42,17 +29,41 @@ GetPredNose         = 1;
 GetPreyPosition     = 1;
 GetStage2Position   = 1;
 
-
+% Transform raw prey coords to coords in predframe of reference
 TransformCoords     = 1;
 
+% Visualize the transformation to check the calculation
 CheckResults        = 1;
 
+% Run Transform coords in batch mode
+batch               = 1; 
 
-batch               = 1; %run Transform coords in batch mode
+
+%% Set paths
+
+% Location of data files on dropbox
+if nargin < 1
+    root_path = uigetdir(pwd,'Select root directory (holds "behavior")');
+end
+
+if root_path==0
+    return
+end
+
+path = [root_path filesep 'behavior'];
+
+%location of raw videos
+vidlocation = '/Volumes/RED/Ch4 Data';
+
+
+%% Prep for all
+
+warning off all;
+clear;
+
+
 clf('reset');
 figure;
-
-
 
 
 
@@ -333,14 +344,7 @@ end
 
 
 
-end
-
-
-
-
-
-
-
+end % CollectData
 
 
 
@@ -375,9 +379,6 @@ if TransformCoords
         %load a2
         load([path filesep 'single coords/rawdata_stage2' filesep...
             datafile]);
-
-
-        
 
         %Get raw coords of predator nose
         predxraw    = a.predx;
@@ -453,9 +454,7 @@ if TransformCoords
             
             clf;
             
-          
-            
-            
+
             subplot(4,2,1),
             
             [namestub] = NameStubber(s,seq,1,1);
@@ -530,16 +529,8 @@ if TransformCoords
                 pause;
             end
             
-            
-            
-            
-            
-            
-            
-            
-            
-            
-        end
+  
+        end %CheckResults
         
         if batch == 0
             break
@@ -606,17 +597,7 @@ namestub = [view '_' lights '_' speed '_seq' seqs '-'...
     num2str(frame) '.tif'];
 
 
-
-
-
 end
-
-
-
-
-
-
-
 
 
 

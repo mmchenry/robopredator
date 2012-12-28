@@ -13,7 +13,16 @@ do_boxplots = 0;
 do_3D = 0;
 
 % Compares the direction of flow gradient to direction of behavior
+do_directioncue = 0;
+
+% Visualize results of direction cue
+vis_directcue = 1;
+
+% Descriptive stats of directional response
 do_direction = 1;
+
+% Visualize individual sequences
+vis_seqs = 0;
 
 
 %% Parameters
@@ -85,13 +94,13 @@ groups = [b.speed(index{1}); b.speed(index{2}); b.speed(index{3})];
 
 if do_boxplots
     
-    % Distance of each of the three body points
-    dist1 = sqrt( b.preyx(:,1).^2 + b.preyy(:,1).^2 + b.preyz(:,1).^2 );
-    dist2 = sqrt( b.preyx(:,2).^2 + b.preyy(:,2).^2 + b.preyz(:,2).^2 );
-    dist3 = sqrt( b.preyx(:,3).^2 + b.preyy(:,3).^2 + b.preyz(:,3).^2 );
-    
-    % Use minimum distance as the response distance
-    resp_dist = min([dist1 dist2 dist3],[],2);
+%     % Distance of each of the three body points
+%     dist1 = sqrt( b.preyx(:,1).^2 + b.preyy(:,1).^2 + b.preyz(:,1).^2 );
+%     dist2 = sqrt( b.preyx(:,2).^2 + b.preyy(:,2).^2 + b.preyz(:,2).^2 );
+%     dist3 = sqrt( b.preyx(:,3).^2 + b.preyy(:,3).^2 + b.preyz(:,3).^2 );
+%     
+%     % Use minimum distance as the response distance
+%     resp_dist = min([dist1 dist2 dist3],[],2);
     
     % Max speed along body for each speed
     max_bod_spd =  [max(f.spd(index{1},:),[],2); ...
@@ -205,11 +214,13 @@ if do_3D
 end
 
 
-%% Anlayze direction of response
+%% Description of directional response
+
 
 if do_direction
     
-    vis_seqs = 1;
+    % Number of bins used in rose plot
+    num_bin = 20;
     
     % Initialize result vectors
     r.pred_spd = nan(size(b.preyx(:,1),1),1);
@@ -217,8 +228,140 @@ if do_direction
     r.phi_pred = nan(size(b.preyx(:,1),1),1);
     r.th_meas  = nan(size(b.preyx(:,1),1),1);
     r.phi_meas = nan(size(b.preyx(:,1),1),1);
+    r.az_prey  = nan(size(b.preyx(:,1),1),1);
+    r.el_prey  = nan(size(b.preyx(:,1),1),1);
     
-      
+    for i = 1:3
+        
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+              & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+          
+        % Offset in x, due to latency
+        lat_offset = latency * spds(i);
+          
+        % Find position of prey
+        prey_pos = [b.preyx(idx,2)+lat_offset b.preyy(idx,2) b.preyz(idx,2)];
+        
+        % Rostrum position
+        rost_pos = [b.preyx(idx,1)+lat_offset b.preyy(idx,1) b.preyz(idx,1)];
+        
+        % Find direction of prey
+        prey_dir(:,1) = b.preyx2(idx,1) - b.preyx(idx,1);
+        prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
+        prey_dir(:,3) = b.preyz2(idx,3) - b.preyz(idx,3);
+        
+        % Transform prey position, assuming mirror symmetry about the predator
+        prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
+        prey_pos(:,2)     = abs(prey_pos(:,2));
+        
+        % Spherical coordinates for prey position
+        [prey_az,prey_el,prey_r] = cart2sph(prey_pos(:,1),...
+                                            prey_pos(:,2),prey_pos(:,3));
+                                        
+        % Spherical coordinates for prey direction                                
+        [dir_az,dir_el,dir_r] = cart2sph(prey_dir(:,1),...
+                                            prey_dir(:,2),prey_dir(:,3));
+                                        
+        % Orientation of prey wrt predator on XY plane
+        prey_orient = atan2(prey_pos(:,2)-rost_pos(:,2),...
+                            prey_pos(:,1)-rost_pos(:,1));
+                                        
+        % Index of indivudual positioned ventral to predator
+        i_vent = prey_pos(:,3)<=0;
+        
+        % Index of L-R responses in the 'wrong' direction
+        i_wrong = prey_dir(:,2)<0;
+        
+        % Index of D-V responses in the 'wrong' direction
+        i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
+                    (~i_vent & (prey_dir(:,3)<=0));
+        
+        if 1
+            figure
+            subplot(2,3,1)
+            quiver(prey_pos(~i_wrong,1),prey_pos(~i_wrong,2),...
+                   prey_dir(~i_wrong,1),prey_dir(~i_wrong,2),'b')
+            hold on
+            quiver(prey_pos(i_wrong,1),prey_pos(i_wrong,2),...
+                   prey_dir(i_wrong,1),prey_dir(i_wrong,2),'r')
+            hold off
+            title([num2str(spds(i)) ' cm/s'])
+            xlabel('x');ylabel('y')
+            axis equal
+            
+            subplot(2,3,2)
+            rose(dir_az(~i_vent & ~i_wrong),num_bin)
+            hold on
+            hR = rose(dir_az(~i_vent & i_wrong),num_bin);
+            set(hR,'Color','r')
+            hold off
+            title('direction azimuth (dorsal)')
+            
+            subplot(2,3,3)
+            rose(dir_az(i_vent & ~i_wrong),num_bin)
+            hold on
+            hR = rose(dir_az(i_vent & i_wrong),num_bin);
+            set(hR,'Color','r')
+            title('direction azimuth (ventral)')
+            
+            subplot(2,3,4)
+            quiver(prey_pos(~i_wrongDV,1),prey_pos(~i_wrongDV,3),...
+                   prey_dir(~i_wrongDV,1),prey_dir(~i_wrongDV,3),'b')
+            hold on
+            quiver(prey_pos(i_wrongDV,1),prey_pos(i_wrongDV,3),...
+                   prey_dir(i_wrongDV,1),prey_dir(i_wrongDV,3),'r')
+            hold off
+            title([num2str(spds(i)) ' cm/s'])
+            xlabel('x');ylabel('z')
+            axis equal
+            
+            subplot(2,3,5)
+            rose(dir_el(~i_vent & ~i_wrongDV),num_bin)
+            hold on
+            hR = rose(dir_el(~i_vent & i_wrongDV),num_bin);
+            set(hR,'Color','r')
+            hold off
+            
+            title('direction elevation (dorsal)')
+            
+            subplot(2,3,6)
+            rose(dir_el(i_vent & ~i_wrongDV),num_bin)
+            hold on
+            hR = rose(dir_el(i_vent & i_wrongDV),num_bin);
+            set(hR,'Color','r')
+            hold off
+            title('direction elevation (ventral)')
+            
+%             figure
+%             plot(prey_orient(~i_wrong),'bo')
+%             hold on
+%             plot(prey_orient(i_wrong),'ro')
+%             title([num2str(spds(i)) ' cm/s'])
+%             hold off
+        end
+        
+        clear prey_dir prey_pos lat_offset idx 
+    end
+
+end % do_direction
+
+
+%% Anlayze flow cues that predict diretcion of response
+
+if do_directioncue
+    
+    % Initialize result vectors
+    r.pred_spd = nan(size(b.preyx(:,1),1),1);
+    r.th_pred  = nan(size(b.preyx(:,1),1),1);
+    r.phi_pred = nan(size(b.preyx(:,1),1),1);
+    r.th_meas  = nan(size(b.preyx(:,1),1),1);
+    r.phi_meas = nan(size(b.preyx(:,1),1),1);
+    r.az_prey  = nan(size(b.preyx(:,1),1),1);
+    r.el_prey  = nan(size(b.preyx(:,1),1),1);
+    r.wrong    = zeros(size(b.preyx(:,1),1),1);
+    r.vent     = zeros(size(b.preyx(:,1),1),1);
+    
     % Loop through speeds
     for i = 1:3
         
@@ -247,6 +390,17 @@ if do_direction
         prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
         prey_dir(:,3) = b.preyz2(idx,3) - b.preyz(idx,3);
         
+        % Transform prey position, assuming mirror symmetry about the predator
+        prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
+        prey_pos(:,2)     = abs(prey_pos(:,2));
+        
+        % Index of indivudual positioned ventral to predator
+        i_vent = prey_pos(:,3)<=0;
+        
+        % Index of L-R responses in the 'wrong' direction
+        i_wrong = prey_dir(:,2)<0;
+        
+        % Step thru each sequence for current speed
         for j = 1:length(seqs)
             
             % Body length of prey
@@ -267,34 +421,58 @@ if do_direction
             
             % Reduce flow field to small volume
             [xS,yS,zS,spdS] = subvolume(cR.x,cR.y,cR.z,cR.spd,subRange);
+            [xS,yS,zS,uS] = subvolume(cR.x,cR.y,cR.z,cR.u,subRange);
+            [xS,yS,zS,vS] = subvolume(cR.x,cR.y,cR.z,cR.v,subRange);
+            [xS,yS,zS,wS] = subvolume(cR.x,cR.y,cR.z,cR.w,subRange);
+            [xS,yS,zS,xCS] = subvolume(cR.x,cR.y,cR.z,cR.xCurl,subRange);
+            [xS,yS,zS,yCS] = subvolume(cR.x,cR.y,cR.z,cR.yCurl,subRange);
+            [xS,yS,zS,zCS] = subvolume(cR.x,cR.y,cR.z,cR.zCurl,subRange);
             clear blength rangeX rangeY rangeZ subRange
             
             % Speed at the prey COM
             spd_prey = griddata(xS,yS,zS,spdS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
             
+            % Velocity at the prey COM
+            u_prey = griddata(xS,yS,zS,uS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            v_prey = griddata(xS,yS,zS,vS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            w_prey = griddata(xS,yS,zS,wS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            
+            % Curl at prey COM
+            xC_prey = griddata(xS,yS,zS,xCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            yC_prey = griddata(xS,yS,zS,yCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            zC_prey = griddata(xS,yS,zS,zCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            
             % Isosurface in this small volume
             [faces,verts] = isosurface(xS,yS,zS,spdS,spd_prey);
             
             % Calculate normal vectors
-            [pos_norm,vect_norm] = cal_norms(faces,verts);
+            %[pos_norm,vect_norm] = cal_norms(faces,verts);
             
             % Distance between verticies and prey COM
-            dist = sqrt((pos_norm(:,1)-prey_pos(j,1)).^2 +  ...
-                        (pos_norm(:,2)-prey_pos(j,2)).^2 + ...
-                        (pos_norm(:,3)-prey_pos(j,3)).^2);
-                    
-            % Index for normal vector closest to the COM
-            i_norm = find(dist==min(dist));
+%             dist = sqrt((pos_norm(:,1)-prey_pos(j,1)).^2 +  ...
+%                         (pos_norm(:,2)-prey_pos(j,2)).^2 + ...
+%                         (pos_norm(:,3)-prey_pos(j,3)).^2);
+%                     
+%             % Index for normal vector closest to the COM
+%             i_norm = find(dist==min(dist));
             
             % Find index for flow data at COM
-            distCOM = abs(f.s(seqs(j),:)./max(f.s(seqs(j),:)) - COM_pos);
-            iCOM = find(distCOM == min(distCOM));
+            %distCOM = abs(f.s(seqs(j),:)./max(f.s(seqs(j),:)) - COM_pos);
+            %iCOM = find(distCOM == min(distCOM));
+            
+            
+%              % Flow predicted diretcion, based on velocity and curl
+%              tmp = cross([xC_prey,yC_prey,zC_prey],[u_prey,v_prey,w_prey]);
+%              tmp = tmp./norm(tmp);
+%              xPredict = tmp(1);yPredict = tmp(2);zPredict = tmp(3);
+%             [th_pred,phi_pred,r_pred] = cart2sph(tmp(1),...
+%                                                  tmp(2),...
+%                                                  tmp(3));
             
             % Flow velocity at COM
-            [th_pred,phi_pred,r_pred] = cart2sph(f.u(seqs(j),iCOM),...
-                                                 f.v(seqs(j),iCOM),...
-                                                 f.w(seqs(j),iCOM));
-            
+            [th_pred,phi_pred,r_pred] = cart2sph(u_prey,...
+                                                 v_prey,...
+                                                 w_prey);
             % Calculate angles of predicted vector
 %             [th_pred,phi_pred,r_pred] = cart2sph(vect_norm(i_norm,1),...
 %                                                  vect_norm(i_norm,2),...
@@ -304,16 +482,28 @@ if do_direction
             [th_meas,phi_meas,r_meas] = cart2sph(prey_dir(j,1),...
                                                  prey_dir(j,2),...
                                                  prey_dir(j,3));   
+            % Calcuate angles of prey position
+            [az_prey,el_prey,r_prey] = cart2sph(prey_pos(j,1),...
+                                                prey_pos(j,2),...
+                                                prey_pos(j,3));
+            
             % Store result
             r.pred_spd(seqs(j)) = spds(i);                                
-            r.th_pred(seqs(j))  = th_pred *180/pi;
-            r.phi_pred(seqs(j)) = phi_pred*180/pi;
+%             r.th_pred(seqs(j))  = th_pred *180/pi;
+%             r.phi_pred(seqs(j)) = phi_pred*180/pi;
             r.th_meas(seqs(j))  = th_meas*180/pi;
             r.phi_meas(seqs(j)) = phi_meas*180/pi;
+            r.az_prey(seqs(j))  = az_prey*180/pi;
+            r.el_prey(seqs(j))  = el_prey*180/pi;
+            r.th_pred(seqs(j))  = th_pred *180/pi;
+            r.phi_pred(seqs(j)) = phi_pred *180/pi;
+            r.wrong(seqs(j))    = i_wrong(j);
+            r.vent(seqs(j))     = i_vent(j);
+            
             
             % Visulaize this step (to confirm calculations
             if vis_seqs
-                % Surface
+                % Isosurface of speed
                 p = patch('Vertices', verts, 'Faces', faces, ...
                     'FaceColor','interp', ...
                     'edgecolor', 'interp');
@@ -326,10 +516,13 @@ if do_direction
                 alpha(p,alpha_val)
                 hold on
                 
-                % Normal vectors
-                hq = quiver3(pos_norm(:,1),pos_norm(:,2),pos_norm(:,3),...
-                    vect_norm(:,1),vect_norm(:,2),vect_norm(:,3),1,'k');
-                set(hq,'Color',.5.*[1 1 1])
+%                 quiver3(prey_pos(j,1),prey_pos(j,2),prey_pos(j,3),...
+%                         xPredict,yPredict,zPredict,0.3,'b')
+                
+%                 % Normal vectors
+%                 hq = quiver3(pos_norm(:,1),pos_norm(:,2),pos_norm(:,3),...
+%                     vect_norm(:,1),vect_norm(:,2),vect_norm(:,3),1,'k');
+%                 set(hq,'Color',.5.*[1 1 1])
                 
 %                 % Highlight closest normal vector
 %                 quiver3(pos_norm(i_norm,1),pos_norm(i_norm,2),pos_norm(i_norm,3),...
@@ -338,7 +531,7 @@ if do_direction
                 
                 % Plot prey direction
                 quiver3(prey_pos(j,1),prey_pos(j,2),prey_pos(j,3),...
-                        prey_dir(j,1),prey_dir(j,2),prey_dir(j,3),1,'b')
+                        prey_dir(j,1),prey_dir(j,2),prey_dir(j,3),1,'r')
                       
                 
                 clear p
@@ -350,79 +543,95 @@ if do_direction
             
         end
         
+        if vis_seqs
+            title([num2str(spds(i)) ' cm/s'])
+            xlabel('x')
+            ylabel('y')
+            zlabel('z')
+            %view(2)
+            view([0 180])
+        end
         
-        % Visualize all responders
-        if 0
-            
-            figure
-            
-            % Isosurface
-            [faces,verts] = isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh);
-            
-            % Calculate normal vectors
-            [pos,vect_norm] = cal_norms(faces,verts);
-
-            
-            p = patch('Vertices', verts, 'Faces', faces, ...
-                'FaceColor','interp', ...
-                'edgecolor', 'interp');
-            set(p,'FaceColor','red','EdgeColor','none');
-            hold on
-            daspect([1,1,1])
-            %view(3);
-            axis tight
-            camlight
-            lighting gouraud
-            alpha(p,alpha_val)
-  
-            
-            %isonormals(cR.x,cR.y,cR.z,cR.spd,p);
-            %n = isonormals(cR.x,cR.y,cR.z,cR.spd,p);
-            
-            quiver3(pos(1:norm_skip:end,1),...
-                pos(1:norm_skip:end,2),...
-                pos(1:norm_skip:end,3),...
-                vect_norm(1:norm_skip:end,1),...
-                vect_norm(1:norm_skip:end,2),...
-                vect_norm(1:norm_skip:end,3),1,'k')
-            
-            hold off
-    
-        end % % Loop for each sequence in a speed
         
         % Clear for next speed
         clear cR prey_dir prey_pos lat_offset idx prey_dir
         
+        disp(' ');disp(['Done ' num2str(spds(i)) ' cm/s'])
+        
     end % Loop for each speed
+    
+    % Save cue analysis data
+    save([root_path filesep 'flow cue analysis'],'r')
+ 
+else
+    % Load previous 'r' 
+    load([root_path filesep 'flow cue analysis'])
+    
 end % do_direction
 
 
+
+
+if vis_directcue
+
+
+figure;
+
 % Plot results
-subplot(1,2,1)
-pred = [min(r.th_pred) max(r.th_pred)];
+subplot(2,2,1)
 
-preds = [r.th_pred(index{1}); r.th_pred(index{2}); r.th_pred(index{3})];
-meas  = [r.th_meas(index{1}); r.th_meas(index{2}); r.th_meas(index{3})];
 
-[c,cint,res,resint,stats]=regress(meas,[ones(length(preds),1) preds]);
+inc{1} = index{1} & ~r.vent & ~r.wrong;
+inc{2} = index{2} & ~r.vent & ~r.wrong;
+inc{3} = index{3} & ~r.vent & ~r.wrong;
 
-plot(r.th_pred(index{1}),r.th_meas(index{1}),'ro',...
-     r.th_pred(index{2}),r.th_meas(index{2}),'bo',...
-     r.th_pred(index{3}),r.th_meas(index{3}),'go',...
-     [pred(1) pred(2)],[pred(1) pred(2)],'k-',...
-     [pred(1) pred(2)],c(2).*[pred(1) pred(2)]+c(1),'k--');
+
+scatter_plot(r.th_pred,r.th_meas,inc)
+
+xlabel('az of velocity at COM (dorsal)')
+ylabel('az of response ')
+
+subplot(2,2,2)
+
+inc{1} = index{1} & r.vent & ~r.wrong;
+inc{2} = index{2} & r.vent & ~r.wrong;
+inc{3} = index{3} & r.vent & ~r.wrong;
+
+scatter_plot(r.th_pred,r.th_meas,inc)
+
+xlabel('az of velocity at COM (ventral)')
+ylabel('az of response ')
+
+
+subplot(2,2,3)
+
+inc{1} = index{1} & ~r.vent;
+inc{2} = index{2} & ~r.vent;
+inc{3} = index{3} & ~r.vent;
+
+scatter_plot(r.phi_pred,r.phi_meas,inc)
+
+xlabel('el of velocity at COM (dorsal)')
+ylabel('el of response')
+
+
+subplot(2,2,4)
+
+inc{1} = index{1} & r.vent;
+inc{2} = index{2} & r.vent;
+inc{3} = index{3} & r.vent;
+
+scatter_plot(r.phi_pred,r.phi_meas,inc)
+
+xlabel('el of velocity at COM (ventral)')
+ylabel('el of response')
+
+
+
+return
+
  
-title(['Azimuth, r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
-axis square
-legend('2','11','20','Location','NorthWest') 
-xlabel('Angle of velocity at COM')
-ylabel('Angle of response')
-
-
-
-
- 
-subplot(1,2,2)
+subplot(2,2,2)
 pred = [min(r.phi_pred) max(r.phi_pred)];
 
 preds = [r.phi_pred(index{1}); r.phi_pred(index{2}); r.phi_pred(index{3})];
@@ -435,12 +644,45 @@ plot(r.phi_pred(index{1}),r.phi_meas(index{1}),'ro',...
      r.phi_pred(index{3}),r.phi_meas(index{3}),'go',...
      [pred(1) pred(2)],[pred(1) pred(2)],'k-',...
      [pred(1) pred(2)],c(2).*[pred(1) pred(2)]+c(1),'k--');
- 
-xlabel('Angle of velocity at COM')
-ylabel('Angle of response')
 
 title(['Elevation, r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
 axis square
+
+
+end
+
+
+function scatter_plot(pred,meas,index)
+
+% All predicted values
+p_pool = [pred(index{1}) ; ...
+          pred(index{2}) ;...
+          pred(index{3}) ];
+     
+% Range of predicted values
+pred_range = [min(p_pool) max(p_pool)];
+
+% All measurements
+m_pool = [meas(index{1}); ...
+          meas(index{2}); ...
+          meas(index{3})];
+
+% Run regression on all data together
+[c,cint,res,resint,stats] = regress(m_pool,[ones(length(p_pool),1) p_pool]);
+
+plot(pred(index{1}),meas(index{1}),'ro',...
+     pred(index{2}),meas(index{2}),'bo',...
+     pred(index{3}),meas(index{3}),'go',...
+     [pred_range(1) pred_range(2)],c(2).*[pred_range(1) pred_range(2)]+c(1),'k--');
+ 
+ %[pred_range(1) pred_range(2)],[pred_range(1) pred_range(2)],'k-',...
+ 
+title(['r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
+axis square
+legend('2','11','20','Location','NorthWest') 
+
+
+
 
 
 

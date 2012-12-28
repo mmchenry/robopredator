@@ -89,6 +89,12 @@ for i = 1:3;
         + 2*(dw_dz).^2 + (du_dy+dv_dx).^2 ...
         + (du_dz+dw_dx).^2 + (dv_dz+dw_dy).^2).^0.5;
     
+    % Divergence
+    %cR.div = divergence(cR.x,cR.y,cR.z,cR.u,cR.v,cR.w);
+    
+    % Curl
+    [cR.xCurl,cR.yCurl,cR.zCurl] = curl(cR.x,cR.y,cR.z,cR.u,cR.v,cR.w); 
+    
     % Save data
     save([root_path filesep 'cfd' filesep fname{i}],'cR')
     
