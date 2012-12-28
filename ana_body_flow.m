@@ -13,7 +13,7 @@ function ana_body_flow(root_path)
 latency = 5e-3;
 
 % Number of points along the body
-numPoints = 100;
+numPoints = 50;
 
 
 %% Paths
@@ -26,9 +26,14 @@ end
 load([root_path filesep 'behavior' filesep 'Transformed_Prey_Coords.mat'])
 
 % Paths to CFD data
-cfd2_path   = [root_path filesep 'cfd' filesep 'flow_02cmps_around_zebrafish.mat'];
-cfd11_path  = [root_path filesep 'cfd' filesep 'flow_11cmps_around_zebrafish.mat'];
-cfd20_path  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat'];
+cfd_path{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_around_zebrafish.mat'];
+cfd_path{2}  = [root_path filesep 'cfd' filesep 'flow_11cmps_around_zebrafish.mat'];
+cfd_path{3}  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat'];
+
+% Values for different approach speeds (cm/s)
+spds(1) = 2;
+spds(2) = 11;
+spds(3) = 20;
 
 
 %% Set up variables
@@ -57,113 +62,48 @@ f.zbod      = nan(size(b.preyx,1),numPoints);
 num_seq = length(b.preyx(:,1));
 
 
-%% Interpolate for 2 cm/s sequences
+%% Interpolate for sequences
 
-% Import 2 cm/s cfd data ('c' structure)
-load(cfd2_path);
-
-% Index for 2 cm/s
-idx = find((b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
-
-for i = 1:length(idx)
+for i = 1:3
     
-    % Sequence number
-    seqnum = idx(i);
+    % Import 2 cm/s cfd data ('c' structure)
+    load(cfd_path{i});
+    
+    % Index of sequences for current speed
+    idx = find((b.speed(1:num_seq)==spds(i)) & (b.LL(1:num_seq)==1) ...
+               & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
     
     % Offset in x, due to latency
-    lat_offset = latency * 2;
- 
-    % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
+    lat_offset = latency * spds(i);
+        
+    for j = 1:length(idx)
+        
+        % Sequence number
+        seqnum = idx(j);
+        
+        % Find flow conditions
+        flow = interpflow(c,b,seqnum,numPoints,lat_offset);
+        
+        % Store results
+        f.s(seqnum,:)        = flow.s;
+        f.spd(seqnum,:)      = flow.spd;
+        f.shrdef(seqnum,:)   = flow.sh_def;
+        f.velgrad(seqnum,:)  = flow.vel_grad;
+        f.xbod(seqnum,:)     = flow.bod_x;
+        f.ybod(seqnum,:)     = flow.bod_y;
+        f.zbod(seqnum,:)     = flow.bod_z;
+        f.u(seqnum,:)        = flow.u;
+        f.v(seqnum,:)        = flow.v;
+        f.w(seqnum,:)        = flow.w;
+        
+        clear flow x_vals y_vals z_vals seqnum
+    end
     
-    % Store results
-    f.s(seqnum,:)        = flow.s;
-    f.spd(seqnum,:)      = flow.spd;
-    f.shrdef(seqnum,:)   = flow.sh_def;
-    f.velgrad(seqnum,:)  = flow.vel_grad;
-    f.xbod(seqnum,:)     = flow.bod_x;
-    f.ybod(seqnum,:)     = flow.bod_y;
-    f.zbod(seqnum,:)     = flow.bod_z;
+    clear c idx
     
-    clear flow x_vals y_vals z_vals seqnum
+    disp(' ');disp(['Done ' num2str(spds(i)) ' cm/s'])
+    
 end
-
-clear c idx
-
-disp(' ');disp('Done 2 cm/s')
-
-
-%% Interpolate for 11 cm/s sequences
-
-% Import 11 cm/s cfd data ('c' structure)
-load(cfd11_path);
-
-% Index for 11 cm/s
-idx = find((b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
-
-for i = 1:length(idx)
-    
-    % Sequence number
-    seqnum = idx(i);
-    
-    % Offset in x, due to latency
-    lat_offset = latency * 11;
- 
-    % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
-    
-    f.s(seqnum,:)        = flow.s;
-    f.spd(seqnum,:)      = flow.spd;
-    f.shrdef(seqnum,:)   = flow.sh_def;
-    f.velgrad(seqnum,:)  = flow.vel_grad;
-    f.xbod(seqnum,:)     = flow.bod_x;
-    f.ybod(seqnum,:)     = flow.bod_y;
-    f.zbod(seqnum,:)     = flow.bod_z;
-    
-    clear flow x_vals y_vals z_vals seqnum
-end
-
-clear c idx
-
-disp(' ');disp('Done 11 cm/s')
-
-
-%% Interpolate for 20 cm/s sequences
-
-% Import 2 cm/s cfd data ('c' structure)
-load(cfd20_path);
-
-% Index for 2 cm/s
-idx = find((b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
-           & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0));
-
-for i = 1:length(idx)
-    
-    % Sequence number
-    seqnum = idx(i);
-    
-    % Offset in x, due to latency
-    lat_offset = latency * 20;
- 
-    % Find flow conditions
-    flow = interpflow(c,b,seqnum,numPoints,lat_offset);
-    
-    f.s(seqnum,:)        = flow.s;
-    f.spd(seqnum,:)      = flow.spd;
-    f.shrdef(seqnum,:)   = flow.sh_def;
-    f.velgrad(seqnum,:)  = flow.vel_grad;
-    f.xbod(seqnum,:)     = flow.bod_x;
-    f.ybod(seqnum,:)     = flow.bod_y;
-    f.zbod(seqnum,:)     = flow.bod_z;
-    
-    clear flow x_vals y_vals z_vals seqnum
-end
-
-clear c idx
-
-disp(' ');disp('Done 20 cm/s')
 
 
 %% Save data
@@ -175,7 +115,7 @@ save([root_path filesep 'behavior' filesep 'flow_along_body.mat'],'f')
 function out = interpflow(c,b,seqnum,numPoints,lat_offset)
 % Interpolates CFD flow field to find flow conditions at input coordinates
 % c - structure of CFD data
-% b - structure of 
+% b - structure of behavioral data
 
 % Scaling of body length for CFD volume to interpolate over
 sclfactr = 1.5;
@@ -291,6 +231,11 @@ end
 
 % Flow speed
 out.spd = sqrt(u.^2 + v.^2 + w.^2)';
+
+% Velocity components
+out.u = u;
+out.v = v;
+out.w = w;
 
 % Body position values (arclength)
 out.s = s;

@@ -4,13 +4,22 @@ function ana_all(root_path)
 
 
 
-%% Parameters
+%% Code execution
 
 % Create boxplots of each parameter that could serve as a cue
-show_boxplots = 1;
+do_boxplots = 0;
 
 % Plots 3D volumes of flow field and responses
-show_3D = 1;
+do_3D = 0;
+
+% Compares the direction of flow gradient to direction of behavior
+do_direction = 1;
+
+
+%% Parameters
+
+% Period between detection and fast start initiation (s)
+latency = 5e-3;
 
 % Modeled threshold of shearing for a response
 sh_thresh = .5;
@@ -23,6 +32,12 @@ COM_pos = .25;
 
 % Alpha transparency for the isosurface plots
 alpha_val = .6;
+
+% Inerval for skipping plotting of normal vectors
+norm_skip = 100;
+
+% Scaling of body length for CFD volume examine for isosurface
+sclfactr = .25;
 
 
 %% Paths
@@ -52,23 +67,23 @@ num_seq = length(b.preyx(:,1));
 spds = [2 11 20];
 
 % Indices for each speed of sequences in the dark, with lateral line intact
-i2 = (b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
+index{1} = (b.speed(1:num_seq)==2) & (b.LL(1:num_seq)==1) ...
      & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0);
 
-i11 = (b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) ...
+index{2} = (b.speed(1:num_seq)==11) & (b.LL(1:num_seq)==1) ...
      & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0);
  
-i20 = (b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
+index{3} = (b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
      & ~isnan(b.preyx(:,1)) & (b.lit(1:num_seq)==0);
 
 % Create groups by speed
-groups = [b.speed(i2); b.speed(i11); b.speed(i20)];
+groups = [b.speed(index{1}); b.speed(index{2}); b.speed(index{3})];
 
 
-%% Response distance boxplots
+%% Response boxplots
 
 
-if show_boxplots
+if do_boxplots
     
     % Distance of each of the three body points
     dist1 = sqrt( b.preyx(:,1).^2 + b.preyy(:,1).^2 + b.preyz(:,1).^2 );
@@ -79,19 +94,19 @@ if show_boxplots
     resp_dist = min([dist1 dist2 dist3],[],2);
     
     % Max speed along body for each speed
-    max_bod_spd =  [max(f.spd(i2,:),[],2); ...
-        max(f.spd(i11,:),[],2); ...
-        max(f.spd(i20,:),[],2)];
+    max_bod_spd =  [max(f.spd(index{1},:),[],2); ...
+        max(f.spd(index{2},:),[],2); ...
+        max(f.spd(index{3},:),[],2)];
     
     % Max velocity gradient along body for each speed
-    max_velgrad =  [max(abs(f.velgrad(i2,:)),[],2); ...
-        max(abs(f.velgrad(i11,:)),[],2); ...
-        max(abs(f.velgrad(i20,:)),[],2)];
+    max_velgrad =  [max(abs(f.velgrad(index{1},:)),[],2); ...
+        max(abs(f.velgrad(index{2},:)),[],2); ...
+        max(abs(f.velgrad(index{3},:)),[],2)];
     
     % Max shearing along body for each speed
-    max_shear   =  [max(f.shrdef(i2,:),[],2); ...
-        max(f.shrdef(i11,:),[],2); ...
-        max(f.shrdef(i20,:),[],2)];
+    max_shear   =  [max(f.shrdef(index{1},:),[],2); ...
+        max(f.shrdef(index{2},:),[],2); ...
+        max(f.shrdef(index{3},:),[],2)];
     
     % Boxplots
     figure;
@@ -117,8 +132,9 @@ end
 
 %% Plot spatial distibution of responders
 
-if show_3D  
+if do_3D  
     
+    % Step through each speed
     for i = 1:3
         
         % New Figure window
@@ -131,7 +147,7 @@ if show_3D
         
         % Plot of position at response
         subplot(1,2,1)
-        plot_prey_pos(f,i2)
+        plot_prey_pos(f,index{i})
         hold on
         title(['Speed (' num2str(spds(i)) ' cm/s)'])
         xlims = xlim;
@@ -141,8 +157,10 @@ if show_3D
         hold on
         
         % Isosurface
-        p = patch(isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh));
-        isonormals(cR.x,cR.y,cR.z,cR.spd,p)
+        [faces,verts] = isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh);
+        p = patch('Vertices', verts, 'Faces', faces, ...
+                  'FaceColor','interp', ...
+                  'edgecolor', 'interp');
         set(p,'FaceColor','red','EdgeColor','none');
         daspect([1,1,1])
         %view(3);
@@ -151,13 +169,16 @@ if show_3D
         lighting gouraud
         alpha(p,alpha_val)
         
+        % This is supposed to smooth the surface plot
+        %isonormals(cR.x,cR.y,cR.z,cR.spd,p);       
+        
         hold off
         
         % 3D plot of shearing and resposes --------------------------------
         
         % Plot of position at response
         subplot(1,2,2)
-        plot_prey_pos(f,i2)
+        plot_prey_pos(f,index{i})
         hold on
         title(['Shear deformation (' num2str(spds(i)) ' cm/s)'])
         xlims = xlim;
@@ -184,7 +205,242 @@ if show_3D
 end
 
 
+%% Anlayze direction of response
 
+if do_direction
+    
+    vis_seqs = 1;
+    
+    % Initialize result vectors
+    r.pred_spd = nan(size(b.preyx(:,1),1),1);
+    r.th_pred  = nan(size(b.preyx(:,1),1),1);
+    r.phi_pred = nan(size(b.preyx(:,1),1),1);
+    r.th_meas  = nan(size(b.preyx(:,1),1),1);
+    r.phi_meas = nan(size(b.preyx(:,1),1),1);
+    
+      
+    % Loop through speeds
+    for i = 1:3
+        
+        if vis_seqs
+            figure;
+        end
+        
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+              & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+        
+        % Sequence numbers 
+        seqs = find(idx);
+        
+        % Offset in x, due to latency
+        lat_offset = latency * spds(i);
+        
+        % Load CFD data in 'cR' structure
+        load(cfd_path{i})
+        
+        % Find position of prey
+        prey_pos = [b.preyx(idx,2)+lat_offset b.preyy(idx,2) b.preyz(idx,2)];
+        
+        % Find direction of prey
+        prey_dir(:,1) = b.preyx2(idx,1) - b.preyx(idx,1);
+        prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
+        prey_dir(:,3) = b.preyz2(idx,3) - b.preyz(idx,3);
+        
+        for j = 1:length(seqs)
+            
+            % Body length of prey
+            blength = norm([b.preyx(seqs(j),3)-b.preyx(seqs(j),1) ...
+                            b.preyy(seqs(j),3)-b.preyy(seqs(j),1) ...
+                            b.preyz(seqs(j),3)-b.preyz(seqs(j),1)]);
+           
+            % Range of volume to interrogate
+            rangeX   = [prey_pos(j,1)-blength*sclfactr ...
+                        prey_pos(j,1)+blength*sclfactr];
+            rangeY   = [prey_pos(j,2)-blength*sclfactr ...
+                        prey_pos(j,2)+blength*sclfactr];
+            rangeZ   = [prey_pos(j,3)-blength*sclfactr ...
+                        prey_pos(j,3)+blength*sclfactr];
+            subRange = [rangeX(1) rangeX(2) ...
+                        rangeY(1) rangeY(2) ...
+                        rangeZ(1) rangeZ(2)];
+            
+            % Reduce flow field to small volume
+            [xS,yS,zS,spdS] = subvolume(cR.x,cR.y,cR.z,cR.spd,subRange);
+            clear blength rangeX rangeY rangeZ subRange
+            
+            % Speed at the prey COM
+            spd_prey = griddata(xS,yS,zS,spdS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            
+            % Isosurface in this small volume
+            [faces,verts] = isosurface(xS,yS,zS,spdS,spd_prey);
+            
+            % Calculate normal vectors
+            [pos_norm,vect_norm] = cal_norms(faces,verts);
+            
+            % Distance between verticies and prey COM
+            dist = sqrt((pos_norm(:,1)-prey_pos(j,1)).^2 +  ...
+                        (pos_norm(:,2)-prey_pos(j,2)).^2 + ...
+                        (pos_norm(:,3)-prey_pos(j,3)).^2);
+                    
+            % Index for normal vector closest to the COM
+            i_norm = find(dist==min(dist));
+            
+            % Find index for flow data at COM
+            distCOM = abs(f.s(seqs(j),:)./max(f.s(seqs(j),:)) - COM_pos);
+            iCOM = find(distCOM == min(distCOM));
+            
+            % Flow velocity at COM
+            [th_pred,phi_pred,r_pred] = cart2sph(f.u(seqs(j),iCOM),...
+                                                 f.v(seqs(j),iCOM),...
+                                                 f.w(seqs(j),iCOM));
+            
+            % Calculate angles of predicted vector
+%             [th_pred,phi_pred,r_pred] = cart2sph(vect_norm(i_norm,1),...
+%                                                  vect_norm(i_norm,2),...
+%                                                  vect_norm(i_norm,3));
+            
+            % Calculate angles of measured direction vector
+            [th_meas,phi_meas,r_meas] = cart2sph(prey_dir(j,1),...
+                                                 prey_dir(j,2),...
+                                                 prey_dir(j,3));   
+            % Store result
+            r.pred_spd(seqs(j)) = spds(i);                                
+            r.th_pred(seqs(j))  = th_pred *180/pi;
+            r.phi_pred(seqs(j)) = phi_pred*180/pi;
+            r.th_meas(seqs(j))  = th_meas*180/pi;
+            r.phi_meas(seqs(j)) = phi_meas*180/pi;
+            
+            % Visulaize this step (to confirm calculations
+            if vis_seqs
+                % Surface
+                p = patch('Vertices', verts, 'Faces', faces, ...
+                    'FaceColor','interp', ...
+                    'edgecolor', 'interp');
+                set(p,'FaceColor','red','EdgeColor','none');
+                daspect([1,1,1])
+                %view(3);
+                axis tight
+                camlight
+                lighting gouraud
+                alpha(p,alpha_val)
+                hold on
+                
+                % Normal vectors
+                hq = quiver3(pos_norm(:,1),pos_norm(:,2),pos_norm(:,3),...
+                    vect_norm(:,1),vect_norm(:,2),vect_norm(:,3),1,'k');
+                set(hq,'Color',.5.*[1 1 1])
+                
+%                 % Highlight closest normal vector
+%                 quiver3(pos_norm(i_norm,1),pos_norm(i_norm,2),pos_norm(i_norm,3),...
+%                     vect_norm(i_norm,1),vect_norm(i_norm,2),vect_norm(i_norm,3),.2,'k');
+                %quiver3
+                
+                % Plot prey direction
+                quiver3(prey_pos(j,1),prey_pos(j,2),prey_pos(j,3),...
+                        prey_dir(j,1),prey_dir(j,2),prey_dir(j,3),1,'b')
+                      
+                
+                clear p
+            end
+            
+            % Clear variables
+            clear spd_prey faces verts pos_norm vect_nor dist i_norm th_pred
+            clear phi_pred r_pred th_meas phi_meas r_meas
+            
+        end
+        
+        
+        % Visualize all responders
+        if 0
+            
+            figure
+            
+            % Isosurface
+            [faces,verts] = isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh);
+            
+            % Calculate normal vectors
+            [pos,vect_norm] = cal_norms(faces,verts);
+
+            
+            p = patch('Vertices', verts, 'Faces', faces, ...
+                'FaceColor','interp', ...
+                'edgecolor', 'interp');
+            set(p,'FaceColor','red','EdgeColor','none');
+            hold on
+            daspect([1,1,1])
+            %view(3);
+            axis tight
+            camlight
+            lighting gouraud
+            alpha(p,alpha_val)
+  
+            
+            %isonormals(cR.x,cR.y,cR.z,cR.spd,p);
+            %n = isonormals(cR.x,cR.y,cR.z,cR.spd,p);
+            
+            quiver3(pos(1:norm_skip:end,1),...
+                pos(1:norm_skip:end,2),...
+                pos(1:norm_skip:end,3),...
+                vect_norm(1:norm_skip:end,1),...
+                vect_norm(1:norm_skip:end,2),...
+                vect_norm(1:norm_skip:end,3),1,'k')
+            
+            hold off
+    
+        end % % Loop for each sequence in a speed
+        
+        % Clear for next speed
+        clear cR prey_dir prey_pos lat_offset idx prey_dir
+        
+    end % Loop for each speed
+end % do_direction
+
+
+% Plot results
+subplot(1,2,1)
+pred = [min(r.th_pred) max(r.th_pred)];
+
+preds = [r.th_pred(index{1}); r.th_pred(index{2}); r.th_pred(index{3})];
+meas  = [r.th_meas(index{1}); r.th_meas(index{2}); r.th_meas(index{3})];
+
+[c,cint,res,resint,stats]=regress(meas,[ones(length(preds),1) preds]);
+
+plot(r.th_pred(index{1}),r.th_meas(index{1}),'ro',...
+     r.th_pred(index{2}),r.th_meas(index{2}),'bo',...
+     r.th_pred(index{3}),r.th_meas(index{3}),'go',...
+     [pred(1) pred(2)],[pred(1) pred(2)],'k-',...
+     [pred(1) pred(2)],c(2).*[pred(1) pred(2)]+c(1),'k--');
+ 
+title(['Azimuth, r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
+axis square
+legend('2','11','20','Location','NorthWest') 
+xlabel('Angle of velocity at COM')
+ylabel('Angle of response')
+
+
+
+
+ 
+subplot(1,2,2)
+pred = [min(r.phi_pred) max(r.phi_pred)];
+
+preds = [r.phi_pred(index{1}); r.phi_pred(index{2}); r.phi_pred(index{3})];
+meas  = [r.phi_meas(index{1}); r.phi_meas(index{2}); r.phi_meas(index{3})];
+
+[c,cint,res,resint,stats]=regress(meas,[ones(length(preds),1) preds]);
+
+plot(r.phi_pred(index{1}),r.phi_meas(index{1}),'ro',...
+     r.phi_pred(index{2}),r.phi_meas(index{2}),'bo',...
+     r.phi_pred(index{3}),r.phi_meas(index{3}),'go',...
+     [pred(1) pred(2)],[pred(1) pred(2)],'k-',...
+     [pred(1) pred(2)],c(2).*[pred(1) pred(2)]+c(1),'k--');
+ 
+xlabel('Angle of velocity at COM')
+ylabel('Angle of response')
+
+title(['Elevation, r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
+axis square
 
 
 
@@ -212,4 +468,37 @@ ylabel('y')
 zlabel('z')
 
 view([0 90])
+
+
+function [pos,vect_norm] = cal_norms(faces,verts)
+% Finds the postion and direction of vectors normal to a 3D surface
+
+% First vectors directed between verticies
+vect1 = verts(faces(:,2),:)-verts(faces(:,1),:);
+
+% Second vectors between verticies
+vect2 = verts(faces(:,3),:)-verts(faces(:,1),:);
+
+% Normal vectors
+vect_norm = cross(vect2,vect1,2);
+
+% Magnitude of normal vectors
+norm_mag = sqrt(vect_norm(:,1).^2 + vect_norm(:,2).^2 + vect_norm(:,3).^2);
+
+%Normalize the normal vectors
+vect_norm = [vect_norm(:,1)./norm_mag ...
+    vect_norm(:,2)./norm_mag ...
+    vect_norm(:,3)./norm_mag];
+
+% Position of normal vectors (centered btwn verticies)
+pos(:,1) = mean([verts(faces(:,1),1) ...
+    verts(faces(:,2),1) ...
+    verts(faces(:,3),1)],2);
+pos(:,2) = mean([verts(faces(:,1),2) ...
+    verts(faces(:,2),2) ...
+    verts(faces(:,3),2)],2);
+pos(:,3) = mean([verts(faces(:,1),3) ...
+    verts(faces(:,2),3) ...
+    verts(faces(:,3),3)],2);
+
 
