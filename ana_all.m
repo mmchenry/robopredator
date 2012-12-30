@@ -13,13 +13,13 @@ do_boxplots = 0;
 do_3D = 0;
 
 % Compares the direction of flow gradient to direction of behavior
-do_directioncue = 0;
+do_directioncue = 1;
 
 % Visualize results of direction cue
 vis_directcue = 1;
 
 % Descriptive stats of directional response
-do_direction = 1;
+do_direction = 0;
 
 % Visualize individual sequences
 vis_seqs = 0;
@@ -139,7 +139,7 @@ if do_boxplots
 end
 
 
-%% Plot spatial distibution of responders
+%% Plot 3D spatial distibution of responders
 
 if do_3D  
     
@@ -247,9 +247,9 @@ if do_direction
         rost_pos = [b.preyx(idx,1)+lat_offset b.preyy(idx,1) b.preyz(idx,1)];
         
         % Find direction of prey
-        prey_dir(:,1) = b.preyx2(idx,1) - b.preyx(idx,1);
+        prey_dir(:,1) = b.preyx2(idx,2) - b.preyx(idx,2);
         prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
-        prey_dir(:,3) = b.preyz2(idx,3) - b.preyz(idx,3);
+        prey_dir(:,3) = b.preyz2(idx,2) - b.preyz(idx,2);
         
         % Transform prey position, assuming mirror symmetry about the predator
         prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
@@ -347,7 +347,7 @@ if do_direction
 end % do_direction
 
 
-%% Anlayze flow cues that predict diretcion of response
+%% Anlayze flow cues that predict direction of response
 
 if do_directioncue
     
@@ -386,9 +386,9 @@ if do_directioncue
         prey_pos = [b.preyx(idx,2)+lat_offset b.preyy(idx,2) b.preyz(idx,2)];
         
         % Find direction of prey
-        prey_dir(:,1) = b.preyx2(idx,1) - b.preyx(idx,1);
+        prey_dir(:,1) = b.preyx2(idx,2) - b.preyx(idx,2);
         prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
-        prey_dir(:,3) = b.preyz2(idx,3) - b.preyz(idx,3);
+        prey_dir(:,3) = b.preyz2(idx,2) - b.preyz(idx,2);
         
         % Transform prey position, assuming mirror symmetry about the predator
         prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
@@ -438,9 +438,9 @@ if do_directioncue
             w_prey = griddata(xS,yS,zS,wS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
             
             % Curl at prey COM
-            xC_prey = griddata(xS,yS,zS,xCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
-            yC_prey = griddata(xS,yS,zS,yCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
-            zC_prey = griddata(xS,yS,zS,zCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            %xC_prey = griddata(xS,yS,zS,xCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            %yC_prey = griddata(xS,yS,zS,yCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
+            %zC_prey = griddata(xS,yS,zS,zCS,prey_pos(j,1),prey_pos(j,2),prey_pos(j,3));
             
             % Isosurface in this small volume
             [faces,verts] = isosurface(xS,yS,zS,spdS,spd_prey);
