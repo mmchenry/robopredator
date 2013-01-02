@@ -8,7 +8,7 @@ function vis_3D(root_path)
 do_cfd_field = 0;
 
 % Creates 3D renderings 
-do_3Dani = 0;
+do_3Dani = 1;
 
 % Static 3D rendering of predator and all prey
 do_3D = 0;
@@ -315,13 +315,16 @@ if do_3Dani
     prey = [1 3 8 12 15 24 27];
     
     % Alpha tranparency of the bow wave
-    bow_alpha = .3;
+    bow_alpha = .4;
     
     % Starting position of predator (cm)
-    start_pred = -4;
+    start_pred = -2;
     
     % Spacing between prey (cm)
-    prey_space = 2;
+    prey_space = 1;
+    
+    % z-position of wall (for casting shadows)
+    z_wall = -1.5;
     
     
     % Load data -----------------------------------------------------------
@@ -353,40 +356,52 @@ if do_3Dani
     
     % Set kinematics for animation ----------------------------------------
     
+
+    % Spacing of prey along x-axis
+    prey_pos = linspace(0,prey_space*length(prey),length(prey));
     
-    x_pos = 0;
-    
-    
-    n_frames = abs(x_pos-start_pred) *  play_rate / spds(i);
+    % Number of frames in animation
+    n_frames = 2 * (abs(max(prey_pos)-start_pred) *  play_rate / spds(i));
         
-    pos_vals = start_pred - linspace(0,start_pred,n_frames);
-  
-    z_wall = -1.5;
+    % Changes in position of predator's nose
+    pos_vals = linspace(start_pred,max(prey_pos),n_frames);
     
-    % New Figure window
-    hF = figure;
-    set(hF,'DoubleBuffer','on')
+    % Limits to the x-axis
+    xlims = [-2 prey_space*length(prey)+.5];
+    
+    % Proximity between predtaor and prey
+    prox = abs(repmat(pos_vals,length(prey_pos),1) - ...
+               repmat(prey_pos',1,length(pos_vals)));
+    
     
     
     % Render the prey -----------------------------------------------------
         
-    %prey_pos = 
     
+    % New Figure window
+    hF = figure;
+    set(hF,'DoubleBuffer','on','Color','w')
     
-    for j = prey
+    % Render each prey
+    for j = 1:length(prey)
         
+        % Prey number
+        n = prey(j);
         
         % Body length of prey
-        blength = norm([tail0(j,1)-rost0(j,1) ...
-            tail0(j,2)-rost0(j,2) ...
-            tail0(j,3)-rost0(j,3)]);
+        blength = norm([tail0(n,1)-rost0(n,1) ...
+                        tail0(n,2)-rost0(n,2) ...
+                        tail0(n,3)-rost0(n,3)]);
+                    
+        % Tranformed position of prey (stage 1)
+        rostT = [prey_pos(j)+rost1(n,1) rost1(n,2:3)];
+        comT  = [prey_pos(j)+com1(n,1)  com1(n,2:3)];
+        tailT = [prey_pos(j)+tail1(n,1) tail1(n,2:3)];
         
-        
-        x_pos = rost1(j,1);
-        
-        rostT = [x_pos rost1(j,2:3)];
-        comT  = [com1(j,1)-rost1(j,1)+x_pos   com1(j,2:3)];
-        tailT = [tail1(j,1)-rost1(j,1)+x_pos  tail1(j,2:3)];
+        % Tranformed position of prey (stage 2)
+        rostT2 = [prey_pos(j)+rost2(n,1) rost2(n,2:3)];
+        comT2  = [prey_pos(j)+com2(n,1)  com2(n,2:3)];
+        tailT2 = [prey_pos(j)+tail2(n,1) tail2(n,2:3)];
         
         % Returns coordinates for prey body in global FOR
         [pXg,pYg,pZg] = prey_global(rostT,comT,tailT,pX,pY,pZ);
@@ -403,14 +418,12 @@ if do_3Dani
         hold on
         
         % Shadow on x-y plane
-        h_prey1Sz(j) = patch(pXg,pYg,0.*pZg+z_wall,pZg*0);
-        set(h_prey1Sz(j),'LineStyle','none','FaceColor',sh_clr);
+        h_prey1S(j) = patch(pXg,pYg,0.*pZg+z_wall,pZg*0);
+        set(h_prey1S(j),'LineStyle','none','FaceColor',sh_clr);
         hold on
         
-        
         % Returns coordinates for prey body in global FOR
-        [pXg2,pYg2,pZg2] = prey_global(rost2(j,:),com2(j,:),tail2(j,:),...
-            pX,pY,pZ);
+        [pXg2,pYg2,pZg2] = prey_global(rostT2,comT2,tailT2,pX,pY,pZ);
         
         % Render the prey
         h_prey2(j) = patch(real(pXg2),real(pYg2),real(pZg2),real(pZg2)*0);
@@ -422,8 +435,11 @@ if do_3Dani
             'FaceColor','r',...
             'AmbientStrength',.5,...
             'Visible','off');
-        hold on
         
+        % Shadow for stage 2 on x-y plane
+        h_prey2S(j) = patch(pXg2,pYg2,0.*pZg2+z_wall,pZg2*0);
+        set(h_prey2S(j),'LineStyle','none','FaceColor',sh_clr,...
+                         'Visible','off');
         
         axis equal
         
@@ -432,7 +448,7 @@ if do_3Dani
     
     %hC = camlight;
     lighting gouraud
-    %set(gca,'XColor','w','YColor','w','ZColor','w')
+    set(gca,'XColor','w','YColor','w','ZColor','w')
     
     %view([165 35])
     %view([180 0])
@@ -440,12 +456,7 @@ if do_3Dani
     
     view([115 22])
     
-    %lightangle(hL,90,0)
-    
-    %xlim([-2 start_pos])
-    %daspect([1,1,1])
-    
-    %p = patch([-8 2 2 -8],[-2 -2 2 2],-.8.*[1 1 1 1],'w');
+    j = 1;
         
     for k = 1:length(pos_vals)
         
@@ -472,21 +483,43 @@ if do_3Dani
                 'FaceColor','interp', 'edgecolor', 'interp');
             set(h_bow,'FaceColor','b','EdgeColor','none');
             alpha(h_bow,bow_alpha)
+            
+%             % Shadow for the bow wave causes it to crash:
+%             h_bowS = patch(verts(:,1)+pos_vals(k),verts(:,2),...
+%                            verts(:,3).*0+z_wall,verts(:,3).*0);
+%             set(h_bowS,'LineStyle','none','FaceColor',sh_clr);
+%             alpha(h_bowS,bow_alpha)
+        end
+        
+        
+        % If bow wave in contact with prey, switch to stage 2 larva
+        if prox(j,k)==min(prox(j,:))
+            
+            set(h_prey1S(j),'Visible','off');
+            set(h_prey1(j),'Visible','off');
+            set(h_prey2S(j),'Visible','on');
+            set(h_prey2(j),'Visible','on');
+                        
+            if j ~= length(prey)
+                j = j + 1;
+            end
+            
         end
         
         hold off
-        
-        
+
         %view([113 -2])
-        xlim([-8 1])
+        xlim([xlims(1) xlims(2)])
         %axis equal
         daspect([1,1,1])
         axis tight
         
         pause(.1)
         
-        delete(h_pred)
-        delete(h_predS)
+        if k<length(pos_vals)
+            delete(h_pred)
+            delete(h_predS)
+        end
         
         if do_bow, delete(h_bow);end
     end
