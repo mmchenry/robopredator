@@ -153,14 +153,20 @@ max_spds = 2.*[1 1 1];
 % Flow fields
 for i = 1:length(L)
     % L/R perspective
+    
     plot_fields(L(i).x,L(i).y,L(i).u_piv,L(i).v_piv,L(i).u_cfd,L(i).v_cfd,...
                 L(i).x_m,L(i).T_m,L(i).B_m,L(i).spd,L(i).tit_txt,max_spds(i));
     
+    %plot_contours(L(i).x,L(i).y,L(i).u_piv,L(i).v_piv,L(i).u_cfd,L(i).v_cfd,...
+    %            L(i).x_m,L(i).T_m,L(i).B_m,L(i).spd,L(i).tit_txt,max_spds(i));
+  
     % D/V perspective
     plot_fields(D(i).x,D(i).y,D(i).u_piv,D(i).v_piv,D(i).u_cfd,D(i).v_cfd,...
                 D(i).x_m,D(i).T_m,D(i).B_m,D(i).spd,D(i).tit_txt,max_spds(i));
+            
+    %plot_contours(D(i).x,D(i).y,D(i).u_piv,D(i).v_piv,D(i).u_cfd,D(i).v_cfd,...
+    %            D(i).x_m,D(i).T_m,D(i).B_m,D(i).spd,D(i).tit_txt,max_spds(i));
 end
-
 
 
 function plot_comparison(L,D)
@@ -457,6 +463,56 @@ clear w_piv w_cfd x_piv y_piv z_piv
 %v_cfd(i_morph) = nan;
 
 
+function plot_contours(x,y,u_piv,v_piv,u_cfd,v_cfd,x_m,T_m,B_m,pred_spd,tit_txt,max_spd)
+% Color to render the body color
+bod_clr = .5.*[1 1 1];
+
+% Calculate speed
+spd_piv = sqrt(u_piv.^2 + v_piv.^2);
+spd_cfd = sqrt(u_cfd.^2 + v_cfd.^2);
+
+% Offset base of arrows by half a gri
+x_off = mean(diff(x(1,:)))/2;
+y_off = mean(diff(y(:,1)))/2;
+
+% New figure window
+figure
+
+% Plot PIV field
+[C,h1] = contour(x-.1,y+.05,log10(spd_piv),linspace(0,log10(pred_spd),10),'--');
+caxis([0 log10(pred_spd)])
+colorbar('north')
+hold on
+axis square
+axis equal
+xLim = xlim;
+yLim = ylim;
+
+title(num2str(pred_spd));
+
+
+% Plot CFD field
+hold on
+[C,h2] = contour(x,y,log10(spd_cfd),linspace(0,log10(pred_spd),10),'-');
+axis square
+axis equal
+h3 = patch([x_m; x_m(end:-1:1)],[B_m; T_m(end:-1:1)],bod_clr);
+set(h3,'EdgeColor','none')
+
+
+xLim = [-.6 1];
+yLim = [-0.35 1];
+
+axis([xLim yLim])
+
+
+pause(0.1);
+
+
+
+
+
+
 function plot_fields(x,y,u_piv,v_piv,u_cfd,v_cfd,x_m,T_m,B_m,pred_spd,tit_txt,max_spd)
 
 % Color to render the body color
@@ -466,7 +522,7 @@ bod_clr = .5.*[1 1 1];
 spd_piv = sqrt(u_piv.^2 + v_piv.^2);
 spd_cfd = sqrt(u_cfd.^2 + v_cfd.^2);
 
-% Offset base of arrows by half a grid
+% Offset base of arrows by half a gri
 x_off = mean(diff(x(1,:)))/2;
 y_off = mean(diff(y(:,1)))/2;
 
@@ -474,41 +530,61 @@ y_off = mean(diff(y(:,1)))/2;
 figure
 
 % Plot PIV field
-subplot(1,2,1)
-h1 = pcolor(x,y,log10(spd_piv));
+subplot(2,1,1)
+h1 = pcolor(x-0.1,y+0.05,log10(spd_piv));
 caxis([0 log10(max_spd)])
-colorbar('South')
+shading interp;
+%h1 = pcolor(x,y,spd_piv);
+%caxis([0.5 pred_spd])
+colorbar;
 set(h1,'EdgeColor','none')
 hold on
-h2 = quiver(x+x_off,y+y_off,u_piv,v_piv,'k');
+%h2 = quiver(x+x_off,y+y_off,u_piv,v_piv,'k');
 axis square
 axis equal
 xLim = xlim;
 yLim = ylim;
-h3 = patch([x_m; x_m(end:-1:1)],[B_m; T_m(end:-1:1)],bod_clr);
-set(h3,'EdgeColor','none')
+%h3 = patch([x_m; x_m(end:-1:1)],[B_m; T_m(end:-1:1)],bod_clr);
+%set(h3,'EdgeColor','none')
 axis([xLim yLim])
 hold off
 title([tit_txt '  PIV'])
 
-clear h1 h2 h3
+xLim = [-.6 1];
+yLim = [-0.35 1];
+
+axis([xLim yLim])
+
+
 
 % Plot CFD field
-subplot(1,2,2)
-h1 = pcolor(x,y,log10(spd_cfd));
+subplot(2,1,2)
+%h2 = pcolor(x,y,spd_cfd);
+%caxis([0.5 pred_spd])
+
+h2 = pcolor(x,y,log10(spd_cfd));
 shading interp
 caxis([0 log10(max_spd)])
-colorbar('South')
-set(h1,'EdgeColor','none')
+colorbar;
+set(h2,'EdgeColor','none')
 hold on
-h2 = quiver(x+x_off,y+y_off,u_cfd,v_cfd,'k');
+%h2 = quiver(x+x_off,y+y_off,u_cfd,v_cfd,'k');
 axis square
 axis equal
 hold on 
-h3 = patch([x_m; x_m(end:-1:1)],[T_m; B_m(end:-1:1)],bod_clr);
-set(h3,'EdgeColor','none')
+%h3 = patch([x_m; x_m(end:-1:1)],[T_m; B_m(end:-1:1)],bod_clr);
+%set(h3,'EdgeColor','none')
 axis([xLim yLim])
 title('CFD')
+
+xLim = [-.6 1];
+yLim = [-0.35 1];
+
+axis([xLim yLim])
+
+
+
+pause(0.1)
 
 
 function comparison_plots(x_piv,y_piv,spd_piv,x_cfd,y_cfd,spd_cfd)

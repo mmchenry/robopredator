@@ -10,7 +10,7 @@ function ana_all(root_path)
 do_boxplots = 0;
 
 % Plots 3D volumes of flow field and responses
-do_3D = 1;
+do_3D = 0;
 
 % Compares the direction of flow gradient to direction of behavior
 do_directioncue = 0;
@@ -29,7 +29,11 @@ vis_seqs = 0;
 
 % Make rose plots of response direction wrt the body for categories of
 % differences in flow
-vis_rose = 0;
+vis_rose = 1;
+
+do_simulate = 0;
+%simulate response direction assuming prey go directly 90 degrees
+%from high flow
 
 
 %% Parameters
@@ -335,7 +339,7 @@ if do_direction
             figure
             subplot(2,3,1)
             
-            arrow3(com1(~i_wrongLR,:),com2(~i_wrongLR,:),'b')
+            arrow3(com1(~i_wrongLR,:),com2(~i_wrongLR,:),'g')
             hold on
             arrow3(com1(i_wrongLR,:),com2(i_wrongLR,:),'r')
             hold off
@@ -743,6 +747,20 @@ if do_bodycue
         i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
                     (~i_vent & (prey_dir(:,3)<=0));
         
+        %Bill added this
+        % Index of all wrong directions based on distance from axis 
+        % extending from predator midline
+        
+        %calculate dist from mildline at t1 and t2
+        dist1 = (com1(:,2).^2 + com1(:,3).^2).^0.5;
+        dist2 = (com2(:,2).^2 + com2(:,3).^2).^0.5;
+        
+   
+        %those going in wrong direction have smaller d2 
+        i_wrong = dist2 < dist1;
+        
+                
+                
         % Step thru each sequence for current speed
         for j = 1:length(seqs)
 
@@ -824,6 +842,7 @@ if do_bodycue
             r.wrongLR(sq,1)   = i_wrongLR(j);
             r.wrongDV(sq,1)   = i_wrongDV(j);
             r.vent(sq,1)      = i_vent(j);
+            r.wrong(sq,1)     = i_wrong(j);
             
             if vis_seqs
                 plot3([rost1(j,1) tail1(j,1)], ...
@@ -859,15 +878,83 @@ end % do_bodycue
 if vis_rose
 
     % Plot direction (az) for rostrum/tail comparisons   
-    rose_wrt_body(b,r,num_bin,index,r.spd_rost,r.spd_tail,'rost','tail','az')
+    %rose_wrt_body(b,r,num_bin,index,r.spd_rost,r.spd_tail,'rost','tail','az')
     
     % Plot direction (az) for left/right comparisons    
-    rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'right','left','az')
+    %rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'right','left','az')
         
+    % Plot direction (az) for left/right comparisons with new 'wrong' calc (Bill)   
+    rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'right','left','both')
+    
     % Plot direction (el) for dorsal/ventral comparisons    
-    rose_wrt_body(b,r,num_bin,index,r.spd_dors,r.spd_vent,'dors','vent','el')
+    %rose_wrt_body(b,r,num_bin,index,r.spd_dors,r.spd_vent,'dors','vent','el')
 
+    
 end % vis_rose
+
+%% Simulate response direction assuming 90 degree direction
+
+if do_simulate
+   
+    
+    
+    %step through speeds
+    for i = 2:3
+        
+    
+        
+        
+        
+        %Lateral simulations
+        
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2));
+        
+        
+        [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+            i_wrongLR,i_wrongDV,prey_dir] = give_points2(b,idx,latency,spds(i));
+        
+        %determine groups based on lateral position
+        idx_l =  (com1(:,2) > 0.5);
+        idx_m =  (com1(:,2) < 0.5);
+            
+        
+        %determine prey dir in global coords
+        body_dir = rost1 - tail1;
+        body_dir_polar = cart2pol(body_dir(:,1),body_dir(:,2));        
+        
+        spd_left = r.spd_left(idx,1);
+        spd_right = r.spd_right(idx,1);
+        
+        %now calculate predicted azimuth
+        %higher on left if positive
+        spd_diff = spd_left - spd_right;
+        
+        sim_dir = nan(length(idx_l),1);
+        
+        sim_dir(spd_diff > 0) = body_dir_polar(spd_diff > 0) - (pi/2);
+        sim_dir(spd_diff < 0) = body_dir_polar(spd_diff < 0) + (pi/2);
+        
+        
+        rose(sim_dir(idx_l));
+        
+        
+        
+        
+        
+        
+        
+        
+        %Lateral Simulations
+    
+    
+    
+    
+    end
+    
+    
+    
+end
 
 
 
@@ -889,8 +976,11 @@ if strcmp(angl,'az')
 elseif strcmp(angl,'el')    
     dir = r.el_dir; 
     wrong = r.wrongDV;
+elseif strcmp(angl,'both') %Bill's addition
+    dir = r.az_dir;
+    wrong = r.wrong;
 else
-    error('unrecognized "angle" input -- should be "az" or "el"')
+    error('unrecognized "angle" input -- should be "az" or "el" or "both"')
 end
     
 % Loop through speeds
@@ -917,10 +1007,13 @@ for i = 1:3
     hR = rose(dir(idx),num_bin);
     set(hR,'Color','r')
     
+    pause(0.1);
+    
     % Index for directional responses in the 'correct' direction, where
     % spd1 < spd2
     idx = index{i} & ~isnan(b.preyx2(:,2)) &  ...
           ~wrong & spd1<spd2;
+          
     
     % Plot results
     subplot(2,3,3+i)
@@ -937,7 +1030,13 @@ for i = 1:3
     % Plot
     hR = rose(dir(idx),num_bin);
     set(hR,'Color','r')
+    
+    pause(0.1);
 end
+
+pause(0.1)
+
+
 
 
 function ptsT = global_to_local(rost,com,tail,pts)
@@ -1161,6 +1260,66 @@ tail1(:,2)  = abs(tail1(:,2));
 rost2(:,2)  = abs(rost2(:,2));
 com2(:,2)   = abs(com2(:,2));
 tail2(:,2)  = abs(tail2(:,2));
+
+% Index of individuals positioned ventral to predator
+i_vent = com0(:,3)<=0;
+
+% Index of L-R responses in the 'wrong' direction
+i_wrongLR = prey_dir(:,2)<0;
+
+% Index of D-V responses in the 'wrong' direction
+i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
+    (~i_vent & (prey_dir(:,3)<=0));
+
+
+
+function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+           i_wrongLR,i_wrongDV,prey_dir] = give_points2(b,idx,latency,spd)
+% Returns the points of the prey body for all sequences denoted by 'idx'
+%this is different than give_pointd because mirror symmetry does not effect
+%the negative values in front of predator
+
+
+% Offset in x, due to latency
+lat_offset = latency * spd;
+
+% Position (wrt predator) of body points when flow sensed
+rost0 = [b.preyx(idx,1)+lat_offset b.preyy(idx,1) b.preyz(idx,1)];
+com0  = [b.preyx(idx,2)+lat_offset b.preyy(idx,2) b.preyz(idx,2)];
+tail0 = [b.preyx(idx,3)+lat_offset b.preyy(idx,3) b.preyz(idx,3)];
+
+% Position (wrt predator) of body points when larva first moves
+rost1 = [b.preyx(idx,1) b.preyy(idx,1) b.preyz(idx,1)];
+com1  = [b.preyx(idx,2) b.preyy(idx,2) b.preyz(idx,2)];
+tail1 = [b.preyx(idx,3) b.preyy(idx,3) b.preyz(idx,3)];
+
+% Position (wrt predator) of body points at end of stage 2
+rost2 = [b.preyx2(idx,1) b.preyy2(idx,1) b.preyz2(idx,1)];
+com2  = [b.preyx2(idx,2) b.preyy2(idx,2) b.preyz2(idx,2)];
+tail2 = [b.preyx2(idx,3) b.preyy2(idx,3) b.preyz2(idx,3)];
+
+% Find direction of response
+prey_dir(:,1) = com2(:,1) - com1(:,1);
+prey_dir(:,2) = com2(:,2) - com1(:,2);
+prey_dir(:,3) = com2(:,3) - com1(:,3);
+
+% Transform prey direction for those at y < -0.5, assuming mirror symmetry
+%about the predator
+prey_dir(com1(:,2)<-.5,2) = -prey_dir(com1(:,2)<-.5,2);
+
+% Transform body points, assuming mirror symmetry about the predator for
+% those positioned at y < -.5
+rost0(com1(:,2)<-.5,2)  = abs(rost0(com1(:,2)<-.5,2));
+com0(com1(:,2)<-.5,2)   = abs(com0(com1(:,2)<-.5,2));
+tail0(com1(:,2)<-.5,2)  = abs(tail0(com1(:,2)<-.5,2));
+
+rost1(com1(:,2)<-.5,2)  = abs(rost1(com1(:,2)<-.5,2));
+com1(com1(:,2)<-.5,2)   = abs(com1(com1(:,2)<-.5,2));
+tail1(com1(:,2)<-.5,2)  = abs(tail1(com1(:,2)<-.5,2));
+
+rost2(com1(:,2)<-.5,2)  = abs(rost2(com1(:,2)<-.5,2));
+com2(com1(:,2)<-.5,2)   = abs(com2(com1(:,2)<-.5,2));
+tail2(com1(:,2)<-.5,2)  = abs(tail2(com1(:,2)<-.5,2));
 
 % Index of individuals positioned ventral to predator
 i_vent = com0(:,3)<=0;

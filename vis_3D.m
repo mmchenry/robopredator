@@ -214,7 +214,7 @@ if do_3D
     %view([165 35])
     %view([180 0])
 
-    view([140 40])
+    view([30 30])
 
     % Render the prey -----------------------------------
     
@@ -257,6 +257,7 @@ if do_3D
         
         
         axis equal
+        
         
     end
     %         plot_prey_pos(f,index{i})
@@ -312,7 +313,8 @@ if do_3Dani
     i = 2;
     
     % Index of some interesting individuals for 11 cm/s sequences
-    prey = [1 3 8 12 15 24 27];
+    %prey = [1 3 8 12 15 24 27];
+    prey = [2 3 9 12 15 24 27];
     
     % Alpha tranparency of the bow wave
     bow_alpha = .4;
@@ -369,7 +371,7 @@ if do_3Dani
     % Limits to the x-axis
     xlims = [-2 prey_space*length(prey)+.5];
     
-    % Proximity between predtaor and prey
+    % Proximity between predator and prey
     prox = abs(repmat(pos_vals,length(prey_pos),1) - ...
                repmat(prey_pos',1,length(pos_vals)));
     
@@ -432,9 +434,19 @@ if do_3Dani
         set(h_prey2(j),'FaceLighting','gouraud',...
             'LineStyle','none',...
             'BackFaceLighting','reverselit',...
+            'FaceColor','g',...
+            'AmbientStrength',.5,...
+            'Visible','off');
+        
+        if j == 3 %if it's prey #9
+            set(h_prey2(j),'FaceLighting','gouraud',...
+            'LineStyle','none',...
+            'BackFaceLighting','reverselit',...
             'FaceColor','r',...
             'AmbientStrength',.5,...
             'Visible','off');
+          
+        end
         
         % Shadow for stage 2 on x-y plane
         h_prey2S(j) = patch(pXg2,pYg2,0.*pZg2+z_wall,pZg2*0);
@@ -450,11 +462,11 @@ if do_3Dani
     lighting gouraud
     set(gca,'XColor','w','YColor','w','ZColor','w')
     
-    %view([165 35])
-    %view([180 0])
+   
     hL = light('position',[0 0 20]);
     
-    view([115 22])
+    view([150 15]);
+    %view([90,5]);
     
     j = 1;
         
@@ -519,11 +531,18 @@ if do_3Dani
         if k<length(pos_vals)
             delete(h_pred)
             delete(h_predS)
+            if do_bow, delete(h_bow);end
         end
         
-        if do_bow, delete(h_bow);end
+        
     end
 end
+
+
+
+
+
+
 
 
 
