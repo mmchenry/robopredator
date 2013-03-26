@@ -8,10 +8,16 @@ function vis_3D(root_path)
 do_cfd_field = 0;
 
 % Creates 3D renderings 
-do_3Dani = 1;
+do_3Dani = 0;
 
 % Static 3D rendering of predator and all prey
 do_3D = 0;
+
+% Creates a streamtube plot
+do_streamtube = 1;
+
+% Interpolate CFD data for streamtube plots
+do_ST_field = 1;
 
 
 %% Parameters
@@ -64,10 +70,15 @@ numPts_circ = 50;
 
 preyColor = [.5 .5 .5];
 
+
 %% Paths
 
-if nargin < 1
+if isempty(dir('/Users/mmchenry/Dropbox/Projects/Robopredator')) && (nargin < 1)
     root_path = uigetdir(pwd,'Select root directory (holds "cfd" & "behavior")');
+    
+else
+    root_path = '/Users/mmchenry/Dropbox/Projects/Robopredator';
+    
 end
 
 % Paths to CFD data arranged in regular grid
@@ -80,6 +91,11 @@ cfd_path{3}  = [root_path filesep 'cfd' filesep 'flow_20cmps_biggrid.mat'];
 raw_cfd_path{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_around_zebrafish.mat'];
 raw_cfd_path{2}  = [root_path filesep 'cfd' filesep 'flow_11cmps_around_zebrafish.mat'];
 raw_cfd_path{3}  = [root_path filesep 'cfd' filesep 'flow_20cmps_around_zebrafish.mat'];
+
+% Paths to CFD data arranged in regular grid for streamtube plot
+cfd_path_ST{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_ST.mat'];
+cfd_path_ST{2}  = [root_path filesep 'cfd' filesep 'flow_11cmps_ST.mat'];
+cfd_path_ST{3}  = [root_path filesep 'cfd' filesep 'flow_20cmps_ST.mat'];
 
 
 %% Load data & define variables
@@ -143,6 +159,70 @@ for i = 1:3;
     save(cfd_path{i},'cB')
     
     clear cB idx
+    
+    disp('                                  ... Done!')
+    
+end
+
+end
+
+
+%% Interpolate CFD data for stream tube plot 
+
+if do_ST_field
+    
+    xNum = 100;
+    
+    sXlim = [-10 4];
+    xYlim = [-5 5];
+    xZlim = [-5 5];
+    
+for i = 1:3;
+    
+    % Update user
+    disp(' ');disp(['Working on ' num2str(spds(i)) ' cm/s ...'])
+    
+    % load cfd data ('c')
+    load(raw_cfd_path{1})   
+    
+    % Values along each dimension
+    
+    DX = range(c.x)./xNum;
+    
+%     xs = sXlim(1):DX:sXlim(2);
+%     ys = xYlim(1):DX:xYlim(2);
+%     zs = xZlim(1):DX:xZlim(2);
+    
+    xs = (min(c.x)+5*DX):DX:(max(c.x)-5*DX);
+    ys = (min(c.y)+5*DX):DX:(max(c.y)-5*DX);
+    zs = (min(c.z)+5*DX):DX:(max(c.z)-5*DX);
+    
+    % x, y & z matrices
+    [cB.x,cB.y,cB.z] = meshgrid(xs,ys,zs);
+    %[Tx,Ty,Tz] = meshgrid(xs,ys,zs);
+    
+    % Downsample data
+%    [Tx,Ty,Tz] = reducevolume(c.x,c.y,c.z,c.u,[10 10 10]);
+    
+    % Interpolate velocity components
+    warning off
+    u = griddata(c.x,c.y,c.z,c.u,cB.x,cB.y,cB.z);
+    v = griddata(c.x,c.y,c.z,c.v,cB.x,cB.y,cB.z);
+    w = griddata(c.x,c.y,c.z,c.w,cB.x,cB.y,cB.z);   
+    warning on
+    
+    % Flow speed
+    cB.spd = sqrt(u.^2 + v.^2 + w.^2);
+
+    % Store vectors
+    cB.u = u;
+    cB.v = v;
+    cB.w = w;
+    
+    % Save data
+    save(cfd_path_ST{i},'cB')
+    
+    clear cB
     
     disp('                                  ... Done!')
     
@@ -539,8 +619,87 @@ if do_3Dani
 end
 
 
+%% Create streamtube rendering of CFD data
 
-
+if do_streamtube
+    
+    % Number of streams in each dimension
+    numstreams = 7;
+    
+    do_pred = 1;
+    
+    % Color of predator body
+    pd_clr = .5.*[1 1 1];
+    
+    % Shadow color
+    sh_clr = .9.*[1 1 1];
+    
+    % Loop thru speeds
+    for i = 2
+        % Load CFD data ('cB')
+        load(cfd_path_ST{i})
+        
+        % x,y & z values of locations for streams
+        xvals = linspace(min(min(cB.x(:,:,1))),max(max(cB.x(:,:,1))),...
+                         numstreams);
+        yvals = linspace(min(min(cB.y(:,:,1))),max(max(cB.y(:,:,1))),...
+                         numstreams);
+        zvals = linspace(min(min(cB.z(1,1,:))),max(max(cB.z(1,1,:))),...
+                         numstreams);
+        
+        % Load predator data (pred3Dshape... matricies)
+        if do_pred
+            load([root_path filesep 'morphology' filesep 'Pred3Dbodyshape.mat'])
+        end             
+           
+        % Meshgrid of streams
+        [sx,sy,sz] = meshgrid(xvals,yvals,zvals);
+        
+        % Make figure
+        figure;
+        
+        
+        
+        hold on
+        
+        % Plot streams
+        %hS = streamtube(cB.x,cB.y,cB.z,cB.u,cB.v,cB.w,sx,sy,sz);
+        
+       
+        
+        hS = slice(cB.x,cB.y,cB.z,log10(cB.spd),min(min(min(cB.x))),0,0);
+        
+        xL = xlim;
+        
+        hS = slice(cB.x,cB.y,cB.z,log10(cB.spd),-31.5,[],[]);
+        
+        colorbar
+        
+        view([53 26])
+        axis equal
+        shading interp;
+        camlight('left'); 
+        lighting gouraud
+        
+        %alpha(hS,0.8);
+        
+        
+        % Render the predator -------------------------------------------------
+        h_pred = patch(pred3DshapeX,pred3DshapeY,...
+                   pred3DshapeZ,pred3DshapeX*0);
+        
+        set(h_pred,'FaceLighting','gouraud',...
+            'LineStyle','none',...
+            'BackFaceLighting','reverselit',...
+            'FaceColor',pd_clr,...
+            'AmbientStrength',.5);
+        
+        
+%         hQ = quiver(cB.x(:,:,1),cB.y(:,:,1),log10(cB.u(:,:,8)),...
+%                     log10(cB.v(:,:,8)));
+%         set(hQ,'Color','k')
+    end
+end
 
 
 
@@ -689,7 +848,6 @@ if 0
     xlabel('x');ylabel('z')
     grid on; axis equal
 end
-
 
 
 function [X,Y,Z]= prey_surf(s,h,w,c,numPts)
