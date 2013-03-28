@@ -23,7 +23,7 @@ vis_directcue = 0;
 do_direction = 0;
 
 % Directional responses wrt differences in flow along body
-do_bodycue = 1;
+do_bodycue = 0;
 
 % Make rose plots of response direction wrt the body for categories of
 % differences in flow (results of do_bodycue)
@@ -65,7 +65,7 @@ sclfactr = .25;
 
 % Scaling of body length for CFD volume around whole body
 %sclfactr_bod = 1.1;
-sclfactr_bod = 1.3;
+sclfactr_bod = 1.5;
 
 % Number of bins used in rose plots
 num_bin = 20;
@@ -111,8 +111,7 @@ index{3} = (b.speed(1:num_seq)==20) & (b.LL(1:num_seq)==1) ...
 groups = [b.speed(index{1}); b.speed(index{2}); b.speed(index{3})];
 
 
-%% Response boxplots
-
+%% Response boxplots (do_boxplots)
 
 if do_boxplots
     
@@ -161,7 +160,7 @@ if do_boxplots
 end
 
 
-%% Plot 3D spatial distibution of responders
+%% Plot 3D spatial distibution of responders (do_3D)
 
 if do_3D  
     
@@ -295,8 +294,7 @@ if do_3D
 end
 
 
-%% Description of directional response
-
+%% Description of directional response (do_direction)
 
 if do_direction
     
@@ -417,7 +415,7 @@ if do_direction
 end % do_direction
 
 
-%% Analyze flow cues that predict direction of response
+%% Analyze flow cues that predict direction of response (do_directioncue)
 
 if do_directioncue
     
@@ -640,7 +638,7 @@ else
 end % do_direction
 
 
-%% Visualize direction cue results
+%% Visualize direction cue results (vis_directcue)
 
 if vis_directcue
     
@@ -699,23 +697,33 @@ if vis_directcue
 end
 
 
-%% Analyze direction wrt flow differences along the body
+%% Analyze direction wrt flow differences along the body (do_bodycue)
 
 if do_bodycue
     
+    % Series of points to evaluate flow along the body (body lengths)
+    s = linspace(0,1,20)';
+    
+    nan1  = nan(size(b.preyx(:,1),1),1);
+    nan3  = nan(size(b.preyx(:,1),1),3);
+    cell1 = cell(size(b.preyx(:,1),1),1);
+    zero1 = zeros(size(b.preyx(:,1),1),1);
+    
     % Initialize result vectors
-    r.pred_spd  = nan(size(b.preyx(:,1),1),1);
-    r.spd_rost  = nan(size(b.preyx(:,1),1),1);
-    r.spd_tail  = nan(size(b.preyx(:,1),1),1);
-    r.spd_right = nan(size(b.preyx(:,1),1),1);
-    r.spd_left  = nan(size(b.preyx(:,1),1),1);
-    r.spd_dors  = nan(size(b.preyx(:,1),1),1);
-    r.spd_vent  = nan(size(b.preyx(:,1),1),1);
-    r.az_dir    = nan(size(b.preyx(:,1),1),1);
-    r.el_dir    = nan(size(b.preyx(:,1),1),1);
-    r.wrongLR   = zeros(size(b.preyx(:,1),1),1);
-    r.wrongDV   = zeros(size(b.preyx(:,1),1),1);
-    r.vent      = zeros(size(b.preyx(:,1),1),1);
+    r.pred_spd  = nan1;
+    r.spd_rost  = nan1;
+    r.spd_tail  = nan1;
+    r.spd_right = cell1;
+    r.spd_left  = cell1;
+    r.spd_dors  = cell1;
+    r.spd_vent  = cell1;
+    r.az_dir    = nan1;
+    r.el_dir    = nan1;
+    r.wrongLR   = zero1;
+    r.wrongDV   = zero1;
+    r.vent      = zero1;
+    
+    clear nan1 nan3 cell1
     
     if vis_seqs
         figure;
@@ -783,10 +791,17 @@ if do_bodycue
             clear rangeX rangeY rangeZ subRange
 
             % Points on the L and R of the body
-            l_ptL = [blength/2 -blength/10 0];
-            r_ptL = [blength/2  blength/10 0];
-            d_ptL = [blength/2  0 blength/10];
-            v_ptL = [blength/2  0 -blength/10];
+            tmp = ones(length(s),1);
+            l_ptL = [s.*blength tmp.*(-blength/10) 0.*tmp];
+            r_ptL = [s.*blength tmp.*(blength/10) 0.*tmp];
+            d_ptL = [s.*blength 0.*tmp tmp.*(blength/10)];
+            v_ptL = [s.*blength 0.*tmp tmp.*(-blength/10)];
+            clear tmp
+            
+%             l_ptL = [blength/2 -blength/10 0];
+%             r_ptL = [blength/2  blength/10 0];
+%             d_ptL = [blength/2  0 blength/10];
+%             v_ptL = [blength/2  0 -blength/10];
             
             % L and R points transformed into global cooridnate system
             l_pt = local_to_global(rost0(j,:),com0(j,:),tail0(j,:),l_ptL);
@@ -800,19 +815,22 @@ if do_bodycue
             % Interpolate for speed 
             spd_vals = griddata(xS,yS,zS,spdS,pnts(:,1),pnts(:,2),pnts(:,3));
 
-            % Speed values at differ spots on the body
-            spd_left  = spd_vals(1);
-            spd_right = spd_vals(2);  
-            spd_rost  = spd_vals(3);
-            spd_tail  = spd_vals(4);
-            spd_dors  = spd_vals(5);
-            spd_vent  = spd_vals(6);
+            % Speed values at different spots on the body
+            spd_left  = spd_vals(1:length(l_pt));
+            spd_right = spd_vals((length(l_pt)+1):(length(l_pt)+length(r_pt)));  
+            spd_rost  = spd_vals((length(l_pt)+1+length(r_pt)));
+            spd_tail  = spd_vals(((length(l_pt)+1+length(r_pt))+1));
+            spd_dors  = spd_vals(((length(l_pt)+3+length(r_pt))):...
+                                 ((length(l_pt)+2+length(r_pt))+length(d_pt)));
+            spd_vent  = spd_vals(((length(l_pt)+3+length(r_pt))+length(d_pt):...
+                                 ((length(l_pt)+2+length(r_pt))+length(d_pt)+length(v_pt))));
+            clear spd_vals pnts
 
-            % Transform direction wrt prey body
+            % Transform position wrt prey body at time 1
             com2L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com2(j,:));
             com1L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com1(j,:));
             
-            % Calculate response direction from local FOR
+            % Calculate response direction from local FOR at time 1
             prey_dirL(:,1) = com2L(:,1) - com1L(:,1);
             prey_dirL(:,2) = com2L(:,2) - com1L(:,2);
             prey_dirL(:,3) = com2L(:,3) - com1L(:,3);
@@ -827,10 +845,10 @@ if do_bodycue
             r.pred_spd(sq,1)  = spds(i);
             r.spd_rost(sq,1)  = spd_rost;
             r.spd_tail(sq,1)  = spd_tail;
-            r.spd_right(sq,1) = spd_right;
-            r.spd_left(sq,1)  = spd_left;
-            r.spd_dors(sq,1)  = spd_dors;
-            r.spd_vent(sq,1)  = spd_vent;
+            r.spd_right{sq}   = spd_right;
+            r.spd_left{sq}    = spd_left;
+            r.spd_dors{sq}    = spd_dors;
+            r.spd_vent{sq}    = spd_vent;
             r.az_dir(sq,1)    = az_dir;
             r.el_dir(sq,1)    = el_dir;
             r.vent(sq,1)      = i_vent(j);
@@ -865,7 +883,7 @@ else
 end % do_bodycue
 
 
-%% Visulize rose plots of direction wrt body
+%% Visulize rose plots of direction wrt body (vis_rose)
 
 if vis_rose
 
@@ -1224,12 +1242,15 @@ end % do_bodycue
 
 
 
+
+
 function rose_wrt_body(b,r,num_bin,index,spd1,spd2,txt1,txt2,angl)
 % Creates rose plots of response diretcion wrt the prey body for different
 % categories that are defined by differences in flow along two regions of
 % the body
       
-figure
+% List of all usable sequences
+seqs = find(~isnan(b.preyx2(:,2)));
 
 % Speed values
 spds = [2 11 20];
@@ -1241,59 +1262,74 @@ if strcmp(angl,'both') %Bill's addition
 else
     error('unrecognized "angle" input -- should be "az" or "el" or "both"')
 end
+
+
+% Vector to keep track of which have 1 being greater than 2
+one_more = nan(length(spd1),1);
     
-% Loop through speeds
+% Loop through squences, mark where one is greater
+for i = 1:length(seqs)
+
+        % Difference in speed between 1 and 2
+        Dspd = spd1{seqs(i)} - spd2{seqs(i)};
+        
+        % Idenx of position where greatest
+        iBod = find(abs(Dspd)==max(abs(Dspd)),1,'first');
+        
+        % Update 'one_more'
+        if Dspd(iBod)<0
+            one_more(seqs(i)) = 0;
+        else
+            one_more(seqs(i)) = 1;
+        end 
+end
+
+figure
+
+% Step through each speed
 for i = 1:3
     
-    % Index for directional responses in the 'correct' direction, where
-    % spd1 > spd2
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & ...
-        ~wrong & spd1>spd2;
     
-    % Plot results
-    subplot(2,3,i) 
+    % Index for spd1>spd2 & 'correct' direction ---------------------------
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==1) & ~wrong;
+    
+    % Plot 
+    subplot(2,3,i)
     rose(dir(idx),num_bin)
     title([num2str(spds(i)) ' cm/s ' txt1 ' > ' txt2])
     hold on
     xlabel(angl)
     
-    % Index for directional responses in the 'incorrect' direction, where
-    % spd1 > spd2
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & ...
-          wrong & spd1>spd2;
+    
+    % Index for spd1>spd2 & 'wrong' direction -----------------------------
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==1) & wrong;
     
     % Plot
     hR = rose(dir(idx),num_bin);
     set(hR,'Color','r')
     
-    pause(0.1);
     
-    % Index for directional responses in the 'correct' direction, where
-    % spd1 < spd2
-    idx = index{i} & ~isnan(b.preyx2(:,2)) &  ...
-          ~wrong & spd1<spd2;
-          
+    % Index for spd1<spd2 & 'correct' direction ---------------------------
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==0) & ~wrong;
     
-    % Plot results
+    % Plot 
     subplot(2,3,3+i)
     rose(dir(idx),num_bin)
     title([num2str(spds(i)) ' cm/s ' txt1 ' < ' txt2])
     xlabel(angl)
     hold on
     
-    % Index for directional responses in the 'incorrect' direction, where
-    % spd1 < spd2
-    idx = index{i} & ~isnan(b.preyx2(:,2)) &  ...
-          wrong & spd1<spd2;
+    
+    % Index for spd1<spd2 & 'wrong' direction -----------------------------
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==0) & wrong;
     
     % Plot
     hR = rose(dir(idx),num_bin);
     set(hR,'Color','r')
     
-    pause(0.1);
 end
 
-pause(0.1)
+
 
 
 function ptsT = global_to_local(rost,com,tail,pts)
@@ -1583,8 +1619,6 @@ vT3 = vT2 - yT2;
 wT3 = wT2 - zT2;
 
 
-
-
 function [xptsT,yptsT,zptsT] = local_to_global_matrix(rost,com,tail,xpts,ypts,zpts)
 % Transforms coordinates (pts, in n x 3) from global to local coordinate
 % system, assuming the y-axis of larvae runs perpendicular to gravity
@@ -1636,7 +1670,6 @@ for i = 1:size(xpts,2)
 end
 
 
-
 function scatter_plot(pred,meas,index)
 
 % All predicted values
@@ -1665,8 +1698,6 @@ plot(pred(index{1}),meas(index{1}),'ro',...
 title(['r2=' num2str(stats(1)) ' p=' num2str(stats(3))]) 
 axis square
 legend('2','11','20','Location','NorthWest') 
-
-%gbl_spd = griddata(xS,yS,zS,spdS,xptsT,yptsT,zptsT);
 
 
 function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
