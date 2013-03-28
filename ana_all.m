@@ -15,25 +15,29 @@ do_3D = 0;
 % Compares the direction of flow gradient to direction of behavior
 do_directioncue = 0;
 
-% Visualize results of direction cue
+% Visualize results of direction cue 
+% (visualizes results of do_directioncue)
 vis_directcue = 0;
 
 % Descriptive stats of directional response
 do_direction = 0;
 
 % Directional responses wrt differences in flow along body
-do_bodycue = 0;
+do_bodycue = 1;
+
+% Make rose plots of response direction wrt the body for categories of
+% differences in flow (results of do_bodycue)
+vis_rose = 1;
 
 % Visualize individual sequences
 vis_seqs = 0;
 
-% Make rose plots of response direction wrt the body for categories of
-% differences in flow
-vis_rose = 1;
-
+% Simulate response direction assuming prey go directly 90 degrees
+% from high flow
 do_simulate = 0;
-%simulate response direction assuming prey go directly 90 degrees
-%from high flow
+
+% Visualze flow wrt body of he larvae
+do_localflow = 0;
 
 
 %% Parameters
@@ -60,7 +64,8 @@ norm_skip = 100;
 sclfactr = .25;
 
 % Scaling of body length for CFD volume around whole body
-sclfactr_bod = 1.1;
+%sclfactr_bod = 1.1;
+sclfactr_bod = 1.3;
 
 % Number of bins used in rose plots
 num_bin = 20;
@@ -740,27 +745,16 @@ if do_bodycue
         % Index of individuals positioned ventral to predator
         i_vent = com0(:,3)<=0;
         
-        % Index of L-R responses in the 'wrong' direction
-        i_wrongLR = prey_dir(:,2)<0;
-        
-        % Index of D-V responses in the 'wrong' direction
-        i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
-                    (~i_vent & (prey_dir(:,3)<=0));
-        
-        %Bill added this
         % Index of all wrong directions based on distance from axis 
-        % extending from predator midline
+        % extending from predator midline (Bill)
         
         %calculate dist from mildline at t1 and t2
         dist1 = (com1(:,2).^2 + com1(:,3).^2).^0.5;
         dist2 = (com2(:,2).^2 + com2(:,3).^2).^0.5;
         
-   
         %those going in wrong direction have smaller d2 
         i_wrong = dist2 < dist1;
-        
-                
-                
+       
         % Step thru each sequence for current speed
         for j = 1:length(seqs)
 
@@ -839,8 +833,6 @@ if do_bodycue
             r.spd_vent(sq,1)  = spd_vent;
             r.az_dir(sq,1)    = az_dir;
             r.el_dir(sq,1)    = el_dir;
-            r.wrongLR(sq,1)   = i_wrongLR(j);
-            r.wrongDV(sq,1)   = i_wrongDV(j);
             r.vent(sq,1)      = i_vent(j);
             r.wrong(sq,1)     = i_wrong(j);
             
@@ -892,6 +884,7 @@ if vis_rose
     
 end % vis_rose
 
+
 %% Simulate response direction assuming 90 degree direction
 
 if do_simulate
@@ -900,10 +893,7 @@ if do_simulate
     
     %step through speeds
     for i = 2:3
-        
-    
-        
-        
+
         
         %Lateral simulations
         
@@ -957,6 +947,282 @@ if do_simulate
 end
 
 
+%% Visualize local flow
+% Visualize results of this anlaysis by running vis_3D with do_localflow = 1;
+
+if do_localflow
+    
+    % Number of points along the x-axis of the body
+    num_xpts = 20;
+    
+    % Range of points along x-axis of body (in body lengths)
+    x_rangeL = [-.5 1.5];
+    
+    % Range of points along y-axis of body (in body lengths)
+    y_rangeL = [-0.5 0.5];
+    
+    % Range of points along the z-axis of body (in body lengths)
+    z_rangeL = [-.5 .5];
+    
+    % Initialize result vectors
+    
+    nan1  = nan(size(b.preyx(:,1),1),1);
+    nan3  = nan(size(b.preyx(:,1),1),3);
+    cell1 = cell(size(b.preyx(:,1),1),1);
+    
+    L.pred_spd = nan1;
+    L.rost0    = nan3;
+    L.com0     = nan3;
+    L.tail0    = nan3;
+    L.rost1    = nan3;
+    L.com1     = nan3;
+    L.tail1    = nan3;
+    L.rost2    = nan3;
+    L.com2     = nan3;
+    L.tail2    = nan3;
+    L.front    = cell1;
+    L.sag      = cell1;
+    L.dirL     = nan3;
+    L.az_dirL  = nan1;
+    L.el_dirL  = nan1;
+    L.wrong    = nan1;
+    
+    clear nan1 nan3
+    
+    % Loop through speeds
+    for i = 1:3
+        
+        
+        % Load CFD data in 'cR' structure
+        load(cfd_path{i})
+        
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+              & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+        
+        % Sequence numbers 
+        seqs = find(idx);
+        
+        % Get body points for all sequences in current speed
+        [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+         i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spds(i));
+        
+        % Index of individuals positioned ventral to predator
+        i_vent = com0(:,3)<=0;
+        
+        % Index of all wrong directions based on distance from axis 
+        % extending from predator midline (Bill)
+        
+        %calculate dist from mildline at t1 and t2
+        dist1 = (com1(:,2).^2 + com1(:,3).^2).^0.5;
+        dist2 = (com2(:,2).^2 + com2(:,3).^2).^0.5;
+        
+        %those going in wrong direction have smaller d2 
+        i_wrong = dist2 < dist1;
+        
+        clear dist1 dist2
+        
+                
+        % Step thru each sequence for current speed
+        for j = 1:length(seqs)
+
+            % Body length of prey
+            blength = norm([tail0(j,1)-rost0(j,1) ...
+                            tail0(j,2)-rost0(j,2) ...
+                            tail0(j,3)-rost0(j,3)]);       
+                        
+            % Range of volume to interrogate
+            rangeX   = [com0(j,1)-blength*sclfactr_bod ...
+                        com0(j,1)+blength*sclfactr_bod];
+            rangeY   = [com0(j,2)-blength*sclfactr_bod ...
+                        com0(j,2)+blength*sclfactr_bod];
+            rangeZ   = [com0(j,3)-blength*sclfactr_bod ...
+                        com0(j,3)+blength*sclfactr_bod];
+            subRange = [rangeX(1) rangeX(2) ...
+                        rangeY(1) rangeY(2) ...
+                        rangeZ(1) rangeZ(2)];
+            
+            % Reduce flow field to small volume
+            [xS,yS,zS,uS]   = subvolume(cR.x,cR.y,cR.z,cR.u,subRange);
+            [xS,yS,zS,vS]   = subvolume(cR.x,cR.y,cR.z,cR.v,subRange);
+            [xS,yS,zS,wS]   = subvolume(cR.x,cR.y,cR.z,cR.w,subRange);
+
+            
+            clear rangeX rangeY rangeZ subRange
+            
+            % Define points for the frontal plane of the body
+            x_valsF = linspace(blength*x_rangeL(1),...
+                               blength*x_rangeL(2),...
+                               num_xpts)';
+            y_valsF = [blength*y_rangeL(1):...
+                       mean(diff(x_valsF)):...
+                       blength*y_rangeL(2)]';
+            
+            % Define points for the saggital plane of the body
+            x_valsS = x_valsF;
+            z_valsS = [blength*z_rangeL(1):...
+                       mean(diff(x_valsS)):...
+                       blength*z_rangeL(2)]';
+            
+            % Meshgrid the frontal and saggital plane coordinates
+            [x2F,y2F,z2F] = meshgrid(x_valsF,y_valsF,0);
+            [x2S,y2S,z2S] = meshgrid(x_valsS,0,z_valsS);
+            
+            % Transform coordinates from local to global systems
+            [xptsF,yptsF,zptsF] = local_to_global_matrix(rost0(j,:),...
+                                      com0(j,:),tail0(j,:),x2F,y2F,z2F);
+            [xptsS,yptsS,zptsS] = local_to_global_matrix(rost0(j,:),...
+                                      com0(j,:),tail0(j,:),x2S,y2S,z2S);
+                                  
+            % Interpolate to get flow velocities (frontal plane)                   
+            gbl_uF   = griddata(xS,yS,zS,uS,xptsF,yptsF,zptsF);
+            gbl_vF   = griddata(xS,yS,zS,vS,xptsF,yptsF,zptsF);
+            gbl_wF   = griddata(xS,yS,zS,wS,xptsF,yptsF,zptsF);
+            
+            % Interpolate to get flow velocities (saggital plane)                   
+            gbl_uS   = griddata(xS,yS,zS,uS,xptsS,yptsS,zptsS);
+            gbl_vS   = griddata(xS,yS,zS,vS,xptsS,yptsS,zptsS);
+            gbl_wS   = griddata(xS,yS,zS,wS,xptsS,yptsS,zptsS);
+            
+            clear xptsF yptsF zptsF xptsS yptsS zptsS
+             
+            % Calculate speed
+            gbl_spdF = sqrt(gbl_uF.^2 + gbl_vF.^2 + gbl_wF.^2);
+            gbl_spdS = sqrt(gbl_uS.^2 + gbl_vS.^2 + gbl_wS.^2);
+            
+            % Transform velocities back to local system           
+            [uF,vF,wF] = global_to_local_flow(rost0(j,:),...
+                              com0(j,:),tail0(j,:),...
+                              xptsF,yptsF,zptsF,...
+                              gbl_uF,gbl_vF,gbl_wF);
+                          
+            [uS,vS,wS] = global_to_local_flow(rost0(j,:),...
+                              com0(j,:),tail0(j,:),...
+                              xptsS,yptsS,zptsS,...
+                              gbl_uS,gbl_vS,gbl_wS);
+                          
+            clear gbl_uF gbl_vF gbl_wF gbl_uS gbl_vS gbl_wS
+                          
+            % Transform fast start direction wrt prey body
+            com2L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com2(j,:));
+            com1L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com1(j,:));
+            
+            % Calculate fast start direction from local FOR
+            prey_dirL(:,1) = com2L(:,1) - com1L(:,1);
+            prey_dirL(:,2) = com2L(:,2) - com1L(:,2);
+            prey_dirL(:,3) = com2L(:,3) - com1L(:,3);  
+            
+            % Angle of response wrt body
+            [az_dir,el_dir,r_dir] = cart2sph(prey_dirL(1),...
+                                             prey_dirL(2),prey_dirL(3));
+            
+            % Reshape all of the saggital plane points
+            new_dim  = [size(x2S,2) size(x2S,3) size(x2S,1)];
+            x2S      = reshape(x2S,new_dim);
+            y2S      = reshape(y2S,new_dim);
+            z2S      = reshape(z2S,new_dim);
+            uS       = reshape(uS,new_dim);
+            vS       = reshape(vS,new_dim);
+            wS       = reshape(wS,new_dim);
+            gbl_spdS = reshape(gbl_spdS,new_dim);
+                
+            if vis_seqs
+                figure
+                
+                % Plot frontal plane
+                surf(x2F,y2F,z2F,gbl_spdF)
+                axis equal
+                shading interp;
+                hold on
+                h = quiver3(x2F,y2F,z2F,uF,vF,wF,0.5,'k');
+                
+                % Plot saggital plane
+                surf(x2S,y2S,z2S,gbl_spdS)
+                h = quiver3(x2S,y2S,z2S,uS,vS,wS,0.5,'k');
+                
+                % Plot response vector
+                h = arrow3([0 0 0],prey_dirL,'k',.5,.5);
+                set(h(1),'LineWidth',2)
+                shading interp;
+                
+                colorbar('South')
+                title([num2str(spds(i)) ' cm/s, seq ' num2str(seqs(j))])
+                
+                %k = waitforbuttonpress;
+                %close
+            end
+
+            % Current sequence
+            sq = seqs(j);
+            
+            % Store results--------------------------
+            
+            % Predator speed
+            L.pred_spd(sq,1)  = spds(i);
+            
+            % Prey coordinates (global system)
+            L.rost0(sq,:) = rost0(j,:);
+            L.com0(sq,:)  = com0(j,:);
+            L.tail0(sq,:) = tail0(j,:);
+            L.rost1(sq,:) = rost1(j,:);
+            L.com1(sq,:)  = com1(j,:);
+            L.tail1(sq,:) = tail1(j,:);
+            L.rost2(sq,:) = rost2(j,:);
+            L.com2(sq,:)  = com2(j,:);
+            L.tail2(sq,:) = tail2(j,:);
+            
+            % Front plane flow (local system)
+            L.front{sq}.xL  = x2F;
+            L.front{sq}.yL  = y2F;
+            L.front{sq}.zL  = z2F;
+            L.front{sq}.uL  = uF;
+            L.front{sq}.vL  = vF;
+            L.front{sq}.wL  = wF;
+            L.front{sq}.spd = gbl_spdF;
+            
+            % Saggital plane flow (local system)
+            L.sag{sq}.xL  = x2S;
+            L.sag{sq}.yL  = y2S;
+            L.sag{sq}.zL  = z2S;
+            L.sag{sq}.uL  = uS;
+            L.sag{sq}.vL  = vS;
+            L.sag{sq}.wL  = wS;
+            L.sag{sq}.spd = gbl_spdS;
+            
+            % Prey response
+            L.dirL(sq,:)    = prey_dirL;  
+            L.az_dirL(sq,1) = az_dir;
+            L.el_dirL(sq,1) = el_dir;
+            L.wrong(sq,1)   = i_wrong(j);   
+            
+            clear x2F y2F z2F uF vF wF gbl_spdF prey_dirL az_dir el_dir
+            clear gbl_spdF gbl_spdS x2S y2S z2S uS vS wS
+            
+            
+            % Update on sequences
+            disp(['      Done ' num2str(j) ' of ' num2str(length(seqs)) ...
+                  ' sequences']);
+
+        end
+        
+        % Update on speeds
+        disp(' ');disp(['Done ' num2str(spds(i)) ' cm/s']);disp(' ')
+        
+    end % Loop for each speed
+    
+    % Save cue analysis data
+    save([root_path filesep 'behavior' filesep 'localflow data'],'L')
+ 
+else
+    % Load previous 'L' 
+    load([root_path filesep 'behavior' filesep 'localflow data'])
+    
+end % do_bodycue
+
+
+
+
+
 
 function rose_wrt_body(b,r,num_bin,index,spd1,spd2,txt1,txt2,angl)
 % Creates rose plots of response diretcion wrt the prey body for different
@@ -967,18 +1233,11 @@ figure
 
 % Speed values
 spds = [2 11 20];
-
-% Determine whether azimuth or elevation
-if strcmp(angl,'az')
-      dir = r.az_dir;    
-      wrong = r.wrongLR;
-      
-elseif strcmp(angl,'el')    
-    dir = r.el_dir; 
-    wrong = r.wrongDV;
-elseif strcmp(angl,'both') %Bill's addition
+    
+if strcmp(angl,'both') %Bill's addition
     dir = r.az_dir;
     wrong = r.wrong;
+    
 else
     error('unrecognized "angle" input -- should be "az" or "el" or "both"')
 end
@@ -1035,8 +1294,6 @@ for i = 1:3
 end
 
 pause(0.1)
-
-
 
 
 function ptsT = global_to_local(rost,com,tail,pts)
@@ -1116,9 +1373,9 @@ function ptsT = local_to_global(rost,com,tail,pts)
 % Transforms coordinates (pts, in n x 3) from global to local coordinate
 % system, assuming the y-axis of larvae runs perpendicular to gravity
 
-% Check dimensions
+% Check dimensions of landmark coordinates
 if size(rost,1)~=1 || size(rost,2)~=3 || size(com,1)~=1 | size(com,2)~=3 ...
-   size(tail,1)~=1 || size(tail,2)~=3 || size(pts,2)~=3 
+   size(tail,1)~=1 || size(tail,2)~=3
     error('inputs have incorrect dimensions')
 end
 
@@ -1146,13 +1403,20 @@ zaxis = zaxis./norm(zaxis);
 %Create rotation matrix (from inertial axes to local axes)
 R = [xaxis' yaxis' zaxis'];
 
-% Rotate points
-ptsT = [R * pts']';
-
-% Translate global coordinates wrt rostrum
-ptsT(:,1) = ptsT(:,1) + rost(1);
-ptsT(:,2) = ptsT(:,2) + rost(2);
-ptsT(:,3) = ptsT(:,3) + rost(3);
+% If points are not meshgridded
+if size(pts,2)==3
+    % Rotate points
+    ptsT = [R * pts']';
+    
+    % Translate global coordinates wrt rostrum
+    ptsT(:,1) = ptsT(:,1) + rost(1);
+    ptsT(:,2) = ptsT(:,2) + rost(2);
+    ptsT(:,3) = ptsT(:,3) + rost(3);
+    
+else
+    error('points need to be arranged in 3 columns')
+    
+end
 
 % Visualize to test
 if 0
@@ -1185,6 +1449,192 @@ if 0
 end
 
 
+function [xT,yT,zT] = global_to_local_matrix(rost,com,tail,xpts,ypts,zpts)
+% Transforms coordinates (pts, in n x 3) from global to local coordinate
+% system, assuming the y-axis of larvae runs perpendicular to gravity
+
+% Check dimensions
+if size(rost,1)~=1 || size(rost,2)~=3 || size(com,1)~=1 || size(com,2)~=3 ...
+   size(tail,1)~=1 || size(tail,2)~=3 
+    error('inputs have incorrect dimensions')
+end
+
+% Retrieve local x axis to determine coordinate system
+xaxis(1,1) = tail(1) - rost(1);
+xaxis(1,2) = tail(2) - rost(2);
+xaxis(1,3) = tail(3) - rost(3);
+
+% Normalize to create a unit vector
+xaxis = xaxis./norm(xaxis);
+
+%Determine local y axis
+%Short hand of cross product of inertial z axis and local x axis
+yaxis = [-xaxis(2) xaxis(1) 0];
+
+% Normalize to create a unit vector
+yaxis = yaxis./norm(yaxis);
+
+%Determine local z axis
+zaxis = cross(xaxis,yaxis);
+
+% Normalize to create a unit vector
+zaxis = zaxis./norm(zaxis);
+
+%Create rotation matrix (from inertial axes to local axes)
+R = [xaxis' yaxis' zaxis'];
+
+% Translate global coordinates wrt rostrum
+xptsT = xpts - rost(1);
+yptsT = ypts - rost(2);
+zptsT = zpts - rost(3);
+
+% Rotate points
+%ptsT = [inv(R) * ptsT']';
+
+% Transformation
+for i = 1:size(xptsT,2)
+    
+    for j = 1:size(xptsT,3)
+        ptsT = [xptsT(:,i,j) yptsT(:,i,j) zptsT(:,i,j)];
+        
+        % Rotate points
+        ptsT = [inv(R) * ptsT']';
+        
+        % Store
+        xT(:,i,j) = ptsT(:,1);
+        yT(:,i,j) = ptsT(:,2);
+        zT(:,i,j) = ptsT(:,3);    
+    end    
+end
+
+
+function [uT3,vT3,wT3] = global_to_local_flow(rost,com,tail,x,y,z,u,v,w)
+% Transforms coordinates (pts, in n x 3) from global to local coordinate
+% system, assuming the y-axis of larvae runs perpendicular to gravity
+
+% Check dimensions
+if size(rost,1)~=1 || size(rost,2)~=3 || size(com,1)~=1 || size(com,2)~=3 ...
+   size(tail,1)~=1 || size(tail,2)~=3 
+    error('inputs have incorrect dimensions')
+end
+
+% Retrieve local x axis to determine coordinate system
+xaxis(1,1) = tail(1) - rost(1);
+xaxis(1,2) = tail(2) - rost(2);
+xaxis(1,3) = tail(3) - rost(3);
+
+% Normalize to create a unit vector
+xaxis = xaxis./norm(xaxis);
+
+%Determine local y axis
+%Short hand of cross product of inertial z axis and local x axis
+yaxis = [-xaxis(2) xaxis(1) 0];
+
+% Normalize to create a unit vector
+yaxis = yaxis./norm(yaxis);
+
+%Determine local z axis
+zaxis = cross(xaxis,yaxis);
+
+% Normalize to create a unit vector
+zaxis = zaxis./norm(zaxis);
+
+%Create rotation matrix (from inertial axes to local axes)
+R = [xaxis' yaxis' zaxis'];
+
+% Translate global coordinates wrt rostrum
+uT = (x + u) - rost(1);
+vT = (y + v) - rost(2);
+wT = (z + w) - rost(3);
+
+xT = x - rost(1);
+yT = y - rost(2);
+zT = z - rost(3);
+
+% Rotate points
+%ptsT = [inv(R) * ptsT']';
+
+% Transformation
+for i = 1:size(uT,2)
+    
+    for j = 1:size(uT,3)
+        
+        pts   = [xT(:,i,j) yT(:,i,j) zT(:,i,j)];
+        vects = [uT(:,i,j) vT(:,i,j) wT(:,i,j)];
+        
+        % Rotate points
+        vects = [inv(R) * vects']';
+        pts   = [inv(R) * pts']';
+        
+        % Store vector components
+        uT2(:,i,j) = vects(:,1);
+        vT2(:,i,j) = vects(:,2);
+        wT2(:,i,j) = vects(:,3);   
+        
+        % Store coordinates
+        xT2(:,i,j) = pts(:,1);
+        yT2(:,i,j) = pts(:,2);
+        zT2(:,i,j) = pts(:,3);
+    end    
+end
+
+uT3 = uT2 - xT2;
+vT3 = vT2 - yT2;
+wT3 = wT2 - zT2;
+
+
+
+
+function [xptsT,yptsT,zptsT] = local_to_global_matrix(rost,com,tail,xpts,ypts,zpts)
+% Transforms coordinates (pts, in n x 3) from global to local coordinate
+% system, assuming the y-axis of larvae runs perpendicular to gravity
+
+% Check dimensions of landmark coordinates
+if size(rost,1)~=1 || size(rost,2)~=3 || size(com,1)~=1 | size(com,2)~=3 ...
+   size(tail,1)~=1 || size(tail,2)~=3
+    error('inputs have incorrect dimensions')
+end
+
+% Retrieve local x axis to determine coordinate system
+xaxis(1,1) = tail(1) - rost(1);
+xaxis(1,2) = tail(2) - rost(2);
+xaxis(1,3) = tail(3) - rost(3);
+
+% Normalize to create a unit vector
+xaxis = xaxis./norm(xaxis);
+
+%Determine local y axis
+%Short hand of cross product of inertial z axis and local x axis
+yaxis = [-xaxis(2) xaxis(1) 0];
+
+% Normalize to create a unit vector
+yaxis = yaxis./norm(yaxis);
+
+%Determine local z axis
+zaxis = cross(xaxis,yaxis);
+
+% Normalize to create a unit vector
+zaxis = zaxis./norm(zaxis);
+
+%Create rotation matrix (from inertial axes to local axes)
+R = [xaxis' yaxis' zaxis'];
+
+% Transformation
+for i = 1:size(xpts,2)
+    
+    for j = 1:size(xpts,3)
+        pts = [xpts(:,i,j) ypts(:,i,j) zpts(:,i,j)];
+        
+        % Rotate points
+        ptsT = [R * pts']';
+        
+        % Store
+        xptsT(:,i,j) = ptsT(:,1) + rost(1);
+        yptsT(:,i,j) = ptsT(:,2) + rost(2);
+        zptsT(:,i,j) = ptsT(:,3) + rost(3);    
+    end    
+end
+
 
 
 function scatter_plot(pred,meas,index)
@@ -1216,6 +1666,7 @@ title(['r2=' num2str(stats(1)) ' p=' num2str(stats(3))])
 axis square
 legend('2','11','20','Location','NorthWest') 
 
+%gbl_spd = griddata(xS,yS,zS,spdS,xptsT,yptsT,zptsT);
 
 
 function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
@@ -1246,20 +1697,20 @@ prey_dir(:,2) = com2(:,2) - com1(:,2);
 prey_dir(:,3) = com2(:,3) - com1(:,3);
 
 % Transform prey direction, assuming mirror symmetry about the predator
-prey_dir(com1(:,2)<0,2) = -prey_dir(com1(:,2)<0,2);
+% prey_dir(com1(:,2)<0,2) = -prey_dir(com1(:,2)<0,2);
 
-% Transform body points, assuming mirror symmetry about the predator
-rost0(:,2)  = abs(rost0(:,2));
-com0(:,2)   = abs(com0(:,2));
-tail0(:,2)  = abs(tail0(:,2));
-
-rost1(:,2)  = abs(rost1(:,2));
-com1(:,2)   = abs(com1(:,2));
-tail1(:,2)  = abs(tail1(:,2));
-
-rost2(:,2)  = abs(rost2(:,2));
-com2(:,2)   = abs(com2(:,2));
-tail2(:,2)  = abs(tail2(:,2));
+% % Transform body points, assuming mirror symmetry about the predator
+% rost0(:,2)  = abs(rost0(:,2));
+% com0(:,2)   = abs(com0(:,2));
+% tail0(:,2)  = abs(tail0(:,2));
+% 
+% rost1(:,2)  = abs(rost1(:,2));
+% com1(:,2)   = abs(com1(:,2));
+% tail1(:,2)  = abs(tail1(:,2));
+% 
+% rost2(:,2)  = abs(rost2(:,2));
+% com2(:,2)   = abs(com2(:,2));
+% tail2(:,2)  = abs(tail2(:,2));
 
 % Index of individuals positioned ventral to predator
 i_vent = com0(:,3)<=0;
@@ -1270,7 +1721,6 @@ i_wrongLR = prey_dir(:,2)<0;
 % Index of D-V responses in the 'wrong' direction
 i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
     (~i_vent & (prey_dir(:,3)<=0));
-
 
 
 function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...

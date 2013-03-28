@@ -14,10 +14,13 @@ do_3Dani = 0;
 do_3D = 0;
 
 % Creates a streamtube plot
-do_streamtube = 1;
+do_streamtube = 0;
 
 % Interpolate CFD data for streamtube plots
-do_ST_field = 1;
+do_ST_field = 0;
+
+% Plot flow in local FOR
+do_localflow = 1;
 
 
 %% Parameters
@@ -73,11 +76,8 @@ preyColor = [.5 .5 .5];
 
 %% Paths
 
-if isempty(dir('/Users/mmchenry/Dropbox/Projects/Robopredator')) && (nargin < 1)
+if  nargin < 1
     root_path = uigetdir(pwd,'Select root directory (holds "cfd" & "behavior")');
-    
-else
-    root_path = '/Users/mmchenry/Dropbox/Projects/Robopredator';
     
 end
 
@@ -702,6 +702,131 @@ if do_streamtube
 end
 
 
+%% Local flow
+
+
+if do_localflow
+    
+    % Load local flow data ('L') 
+    load([root_path filesep 'behavior' filesep 'localflow data.mat'])
+    
+    % Load data, define dimensions ('m')
+    load([root_path filesep 'morphology' filesep '6_02_L19_metrics.mat']);
+    
+    % Define 3d data for prey in local FOR
+    [pX,pY,pZ] = prey_surf(m.s,m.h,m.w,m.c,numPts_circ); clear m
+    
+    % Prey number
+   % n = prey(j);
+    
+
+%     % Tranformed position of prey (stage 1)
+%     rostT = [prey_pos(j)+rost1(n,1) rost1(n,2:3)];
+%     comT  = [prey_pos(j)+com1(n,1)  com1(n,2:3)];
+%     tailT = [prey_pos(j)+tail1(n,1) tail1(n,2:3)];
+%     
+%     % Tranformed position of prey (stage 2)
+%     rostT2 = [prey_pos(j)+rost2(n,1) rost2(n,2:3)];
+%     comT2  = [prey_pos(j)+com2(n,1)  com2(n,2:3)];
+%     tailT2 = [prey_pos(j)+tail2(n,1) tail2(n,2:3)];
+%     
+    % Returns coordinates for prey body in global FOR
+    [pXg,pYg,pZg] = prey_global([0 0 0.025],[0 0 0],[max(pX(:)) 0 0],pX,pY,pZ);
+%     
+    
+    
+    
+    
+    for i = 2
+        
+        % Choose index for sequences that have stage 2 data
+        idx = (L.pred_spd==spds(i)) & ~isnan(L.rost2(:,1)); 
+        
+        seqs = find(idx);
+        
+        for j = 1:length(seqs)
+            
+            % Gather frontal plane data
+            xF = L.front{seqs(j)}.xL;
+            yF = L.front{seqs(j)}.yL;
+            zF = L.front{seqs(j)}.zL;
+            uF = L.front{seqs(j)}.uL;
+            vF = L.front{seqs(j)}.vL;
+            wF = L.front{seqs(j)}.wL;
+            sF = L.front{seqs(j)}.spd;
+            
+            % Gather saggital plane data
+            xS = L.sag{seqs(j)}.xL;
+            yS = L.sag{seqs(j)}.yL;
+            zS = L.sag{seqs(j)}.zL;
+            uS = L.sag{seqs(j)}.uL;
+            vS = L.sag{seqs(j)}.vL;
+            wS = L.sag{seqs(j)}.wL;
+            sS = L.sag{seqs(j)}.spd;
+            
+            % Direction of fast start
+            py_dir = L.dirL(seqs(j),:);
+            
+            % Body length
+            % Body length of prey
+            blength = norm([...
+                L.tail0(seqs(j),1)-L.rost0(seqs(j),1) ...
+                L.tail0(seqs(j),2)-L.rost0(seqs(j),2) ...
+                L.tail0(seqs(j),3)-L.rost0(seqs(j),3)]);
+            
+            COM = [0.11 0 0];
+            
+            %figure
+            
+            % Plot frontal plane
+            hF = surf(xF,yF,zF,sF);
+            axis equal
+            shading interp;
+            hold on
+            alpha(hF,.75)
+            h = quiver3(xF,yF,zF,uF,vF,wF,0.5,'k');
+            
+            % Plot saggital plane
+            hS = surf(xS,yS,zS,sS);
+            alpha(hF,.75);
+            h = quiver3(xS,yS,zS,uS,vS,wS,0.5,'k');
+            
+            % Plot response vector
+            h = arrow3(COM,COM+py_dir,'k',.5,.5);
+            set(h(1),'LineWidth',2)
+            shading interp;
+            
+            colorbar('South')
+            title([num2str(spds(i)) ' cm/s, seq ' num2str(seqs(j))])
+            
+            % Render the prey
+            h_prey1 = patch(real(pXg),real(pYg),real(pZg),real(pZg)*0);
+            
+            % Set properties
+            set(h_prey1,'FaceLighting','gouraud',...
+                'LineStyle','none',...
+                'FaceColor',preyColor);
+            if py_dir(2)<=0
+                view([-50 16])
+            else
+                view([-130 16])
+            end
+            
+            view([-90 90])
+                
+%             set(h_prey1,'FaceLighting','gouraud',...
+%                 'LineStyle','none',...
+%                 'BackFaceLighting','reverselit',...
+%                 'FaceColor',preyColor,...
+%                 'AmbientStrength',.5);
+            hold off
+            
+        end
+        
+        
+    end
+end
+
 
 
 
@@ -749,21 +874,21 @@ prey_dir(:,1) = com2(:,1) - com1(:,1);
 prey_dir(:,2) = com2(:,2) - com1(:,2);
 prey_dir(:,3) = com2(:,3) - com1(:,3);
 
-% Transform prey direction, assuming mirror symmetry about the predator
-prey_dir(com1(:,2)<0,2) = -prey_dir(com1(:,2)<0,2);
-
-% Transform body points, assuming mirror symmetry about the predator
-rost0(:,2)  = abs(rost0(:,2));
-com0(:,2)   = abs(com0(:,2));
-tail0(:,2)  = abs(tail0(:,2));
-
-rost1(:,2)  = abs(rost1(:,2));
-com1(:,2)   = abs(com1(:,2));
-tail1(:,2)  = abs(tail1(:,2));
-
-rost2(:,2)  = abs(rost2(:,2));
-com2(:,2)   = abs(com2(:,2));
-tail2(:,2)  = abs(tail2(:,2));
+% % Transform prey direction, assuming mirror symmetry about the predator
+% prey_dir(com1(:,2)<0,2) = -prey_dir(com1(:,2)<0,2);
+% 
+% % Transform body points, assuming mirror symmetry about the predator
+% rost0(:,2)  = abs(rost0(:,2));
+% com0(:,2)   = abs(com0(:,2));
+% tail0(:,2)  = abs(tail0(:,2));
+% 
+% rost1(:,2)  = abs(rost1(:,2));
+% com1(:,2)   = abs(com1(:,2));
+% tail1(:,2)  = abs(tail1(:,2));
+% 
+% rost2(:,2)  = abs(rost2(:,2));
+% com2(:,2)   = abs(com2(:,2));
+% tail2(:,2)  = abs(tail2(:,2));
 
 % Index of individuals positioned ventral to predator
 i_vent = com0(:,3)<=0;
@@ -774,7 +899,6 @@ i_wrongLR = prey_dir(:,2)<0;
 % Index of D-V responses in the 'wrong' direction
 i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
     (~i_vent & (prey_dir(:,3)<=0));
-
 
 
 function ptsT = local_to_global(rost,com,tail,pts)
