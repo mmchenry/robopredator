@@ -11,7 +11,7 @@ do_cfd_field = 0;
 do_3Dani = 0;
 
 % Static 3D rendering of predator and all prey
-do_3D = 0;
+do_3D = 1;
 
 % Creates a streamtube plot
 do_streamtube = 0;
@@ -20,7 +20,7 @@ do_streamtube = 0;
 do_ST_field = 0;
 
 % Plot flow in local FOR
-do_localflow = 1;
+do_localflow = 0;
 
 
 %% Parameters
@@ -85,7 +85,6 @@ end
 cfd_path{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_biggrid.mat'];
 cfd_path{2}  = [root_path filesep 'cfd' filesep 'flow_11cmps_biggrid.mat'];
 cfd_path{3}  = [root_path filesep 'cfd' filesep 'flow_20cmps_biggrid.mat'];
-
 
 % Paths to CFD data
 raw_cfd_path{1}  = [root_path filesep 'cfd' filesep 'flow_02cmps_around_zebrafish.mat'];
@@ -289,7 +288,7 @@ if do_3D
     axis tight
     
     lighting gouraud
-    set(gca,'XColor','w','YColor','w','ZColor','w')
+    %set(gca,'XColor','w','YColor','w','ZColor','w')
     
     %view([165 35])
     %view([180 0])

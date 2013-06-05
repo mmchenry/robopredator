@@ -27,17 +27,22 @@ do_bodycue = 0;
 
 % Make rose plots of response direction wrt the body for categories of
 % differences in flow (results of do_bodycue)
-vis_rose = 1;
+vis_rose_local = 0;
+
+% Make rose plots of response direction wrt the global FOR
+vis_rose_global = 0;
 
 % Visualize individual sequences
 vis_seqs = 0;
 
-% Simulate response direction assuming prey go directly 90 degrees
-% from high flow
-do_simulate = 0;
-
-% Visualze flow wrt body of he larvae
+% Visualze flow wrt body of the larvae
 do_localflow = 0;
+
+% Visualze flow wrt body of the larvae 2D
+do_localflow2D = 1;
+
+% Visualize position of responses from above and side for all three speeds
+do_position = 0;
 
 
 %% Parameters
@@ -55,7 +60,7 @@ spd_thresh = .1;
 COM_pos = .25;
 
 % Alpha transparency for the isosurface plots
-alpha_val = .6;
+alpha_val = .4;
 
 % Inerval for skipping plotting of normal vectors
 norm_skip = 100;
@@ -69,6 +74,14 @@ sclfactr_bod = 1.5;
 
 % Number of bins used in rose plots
 num_bin = 20;
+
+% Dividing line for lateral/medial position (cm)
+lat_pos = 0.5;
+
+% Number of points around the periphery of the prey body
+numPts_circ = 50;
+
+preyColor = [.5 .5 .5];
 
 
 %% Paths
@@ -164,7 +177,17 @@ end
 
 if do_3D  
     
-    p_clr = .5.*[1 1 1];
+    % Color of predator
+    p_clr = .6.*[1 1 1];
+    
+    % Color of surface
+    s_clr = [102 102 255]./255;
+    
+    % Color of correct direction
+    c_clr = [0 127 0]./255;
+    
+    % Color of wrong direction
+    w_clr = [255 0 0]./255;
     
     % Load predator data
     load([root_path filesep 'morphology' filesep 'Pred3Dbodyshape.mat']) 
@@ -186,7 +209,7 @@ if do_3D
         
         % Get body points for all seqnences in current speed
         [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-            i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spds(i));
+            i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
         
         
         % 3D plot of speed and resposes -----------------------------------
@@ -195,20 +218,28 @@ if do_3D
         %subplot(1,2,1)
         
         for j = 1:size(rost1,1)
-            plot3([rost1(j,1) tail1(j,1)], ...
+            % Plot location of larvae
+            h = plot3([rost1(j,1) tail1(j,1)], ...
                 [rost1(j,2) tail1(j,2)], ...
                 [rost1(j,3) tail1(j,3)],'k',...
-                rost1(j,1),rost1(j,2),rost1(j,3),'ok')
+                rost1(j,1),rost1(j,2),rost1(j,3),'ok');
             hold on
             warning off
-            arrow3(com1(j,:),com2(j,:),'r')
+            if i_wrong(j)
+                arrow3(com1(j,:),com2(j,:),'r-1',3,3);
+            else
+                arrow3(com1(j,:),com2(j,:),'e-1',3,3);
+                %arrow3('colors',0.5) 
+            end
             warning on
             axis equal
             
+            % Remove location of larvae
+            delete(h)
         end
 %         plot_prey_pos(f,index{i})
          hold on
-        title(['Speed (' num2str(spds(i)) ' cm/s)'])
+        %title(['Speed (' num2str(spds(i)) ' cm/s)'])
         xlims = xlim;
         ylims = ylim;
         zlims = zlim;
@@ -234,20 +265,24 @@ if do_3D
         p = patch('Vertices', verts, 'Faces', faces, ...
                   'FaceColor','interp', ...
                   'edgecolor', 'interp');
-        set(p,'FaceColor','b','EdgeColor','none');
+        set(p,'FaceColor',s_clr,'EdgeColor','none');
         daspect([1,1,1])
         %view(3);
         axis tight
-        camlight
+        %camlight
         lighting gouraud
         alpha(p,alpha_val)
         xlims = xlim;
         ylims = ylim;
         zlims = zlim;
-        xlabel('x'),ylabel('y'),zlabel('z')
+        %xlabel('x'),ylabel('y'),zlabel('z')
         
-        view([165 35])
-        light('position',[60,60,60])
+        %view([39 36])
+        %view([0 90])
+        view([56 4])
+        light('position',[60,60,0])
+        %light('position',[0,-60,60])
+        light('position',[0,-60,-30])
         %xlim([-1 1.5])
         
         % This is supposed to smooth the surface plot
@@ -291,6 +326,11 @@ if do_3D
         
     end   
     
+    set(gca,'XColor','w')
+    set(gca,'YColor','w')
+    set(gca,'ZColor','w')
+    zoom(1.75)
+    
 end
 
 
@@ -315,7 +355,7 @@ if do_direction
           
         % Get body points for all seqnences in current speed
         [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-            i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spds(i));
+            i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
         
         % Spherical coordinates for prey position
         [prey_az,prey_el,prey_r] = cart2sph(com0(:,1),com0(:,2),com0(:,3));
@@ -323,28 +363,31 @@ if do_direction
         % Spherical coordinates for prey direction                                
         [dir_az,dir_el,dir_r] = cart2sph(prey_dir(:,1),prey_dir(:,2),...
                                          prey_dir(:,3));
-                                        
+         
+        disp(['Spd = ' num2str(spds(i)) '  ' ...
+              num2str(100*sum(~i_wrong)/length(i_wrong)) '% '])
+    
 %         % Orientation of prey wrt predator on XY plane
 %         prey_orient = atan2(prey_pos(:,2)-rost_pos(:,2),...
 %                             prey_pos(:,1)-rost_pos(:,1));
                                         
         % Index of indivudual positioned ventral to predator
-        i_vent = com0(:,3)<=0;
-        
-        % Index of L-R responses in the 'wrong' direction
-        i_wrong = prey_dir(:,2)<0;
+        i_vent = com0(:,3)<=0;        
         
         % Index of D-V responses in the 'wrong' direction
-        i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
+        i_wrong = (i_vent & (prey_dir(:,3)>0)) |  ...
                     (~i_vent & (prey_dir(:,3)<=0));
         
+                
+        
+    
         if 1
             figure
             subplot(2,3,1)
             
-            arrow3(com1(~i_wrongLR,:),com2(~i_wrongLR,:),'g')
+            arrow3(com1(~i_wrong,:),com2(~i_wrong,:),'g')
             hold on
-            arrow3(com1(i_wrongLR,:),com2(i_wrongLR,:),'r')
+            arrow3(com1(i_wrong,:),com2(i_wrong,:),'r')
             hold off
             
             title([num2str(spds(i)) ' cm/s'])
@@ -356,9 +399,9 @@ if do_direction
             light('position',[-60,-60,-60]), lighting gouraud
             
             subplot(2,3,2)
-            rose(dir_az(~i_vent & ~i_wrongLR),num_bin)
+            rose(dir_az(~i_vent & ~i_wrong),num_bin)
             hold on
-            hR = rose(dir_az(~i_vent & i_wrongLR),num_bin);
+            hR = rose(dir_az(~i_vent & i_wrong),num_bin);
             set(hR,'Color','r')
             hold off
             title('direction azimuth (dorsal)')
@@ -371,9 +414,9 @@ if do_direction
             title('direction azimuth (ventral)')
             
             subplot(2,3,4)
-            arrow3(com1(~i_wrongDV,:),com2(~i_wrongDV,:),'b')
+            arrow3(com1(~i_wrong,:),com2(~i_wrong,:),'b')
             hold on
-            arrow3(com1(i_wrongDV,:),com2(i_wrongDV,:),'r')
+            arrow3(com1(i_wrong,:),com2(i_wrong,:),'r')
             hold off
             
             title([num2str(spds(i)) ' cm/s'])
@@ -385,18 +428,18 @@ if do_direction
             light('position',[-60,-60,-60]), lighting gouraud
             
             subplot(2,3,5)
-            rose(dir_el(~i_vent & ~i_wrongDV),num_bin)
+            rose(dir_el(~i_vent & ~i_wrong),num_bin)
             hold on
-            hR = rose(dir_el(~i_vent & i_wrongDV),num_bin);
+            hR = rose(dir_el(~i_vent & i_wrong),num_bin);
             set(hR,'Color','r')
             hold off
             
             title('direction elevation (dorsal)')
             
             subplot(2,3,6)
-            rose(dir_el(i_vent & ~i_wrongDV),num_bin)
+            rose(dir_el(i_vent & ~i_wrong),num_bin)
             hold on
-            hR = rose(dir_el(i_vent & i_wrongDV),num_bin);
+            hR = rose(dir_el(i_vent & i_wrong),num_bin);
             set(hR,'Color','r')
             hold off
             title('direction elevation (ventral)')
@@ -458,9 +501,9 @@ if do_directioncue
         prey_dir(:,2) = b.preyy2(idx,2) - b.preyy(idx,2);
         prey_dir(:,3) = b.preyz2(idx,2) - b.preyz(idx,2);
         
-        % Transform prey position, assuming mirror symmetry about the predator
-        prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
-        prey_pos(:,2)     = abs(prey_pos(:,2));
+%         % Transform prey position, assuming mirror symmetry about the predator
+%         prey_dir(prey_pos(:,2)<0,2) = -prey_dir(prey_pos(:,2)<0,2);  
+%         prey_pos(:,2)     = abs(prey_pos(:,2));
         
         % Index of indivudual positioned ventral to predator
         i_vent = prey_pos(:,3)<=0;
@@ -748,7 +791,7 @@ if do_bodycue
         
         % Get body points for all sequences in current speed
         [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-         i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spds(i));
+         i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
         
         % Index of individuals positioned ventral to predator
         i_vent = com0(:,3)<=0;
@@ -808,6 +851,9 @@ if do_bodycue
             r_pt = local_to_global(rost0(j,:),com0(j,:),tail0(j,:),r_ptL);
             d_pt = local_to_global(rost0(j,:),com0(j,:),tail0(j,:),d_ptL);
             v_pt = local_to_global(rost0(j,:),com0(j,:),tail0(j,:),v_ptL);
+            
+%             sqrt((com1(j,1)-com2(j,1))^2 + (com1(j,2)-com2(j,2))^2 + ...
+%                  (com1(j,3)-com2(j,3))^2)
             
             % Package points for griddata
             pnts = [l_pt; r_pt; rost0(j,:); tail0(j,:); d_pt; v_pt];
@@ -883,9 +929,62 @@ else
 end % do_bodycue
 
 
-%% Visulize rose plots of direction wrt body (vis_rose)
+%% Visulize rose plots of direction in global FOR (vis_rose_global)
 
-if vis_rose
+if vis_rose_global
+    
+    % Index for speed
+    i = 3;
+    
+    % Choose index for sequences that have stage 2 data
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+        & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+    
+    % Get body points for all seqnences in current speed
+    [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+        i_wrong,prey_dir] = give_points(b,idx,latency,spds(i)); 
+
+    % Azimuth of responses
+    [az,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,2)-com1(:,2));
+    
+    % Elevation of responses
+    [el,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,3)-com1(:,3));
+
+    % Flip sign of azimuth for lateral positions, if negative y coordinate
+    iFlip = (com1(:,2)<0) & (abs(com1(:,2)) > lat_pos);
+    az(iFlip) = -az(iFlip);
+    
+    % Idices for postion
+    iLat  = abs(com1(:,2)) > lat_pos;
+    iMed  = abs(com1(:,2)) <= lat_pos;
+    iDors = com1(:,3) > 0; 
+    iVent = com1(:,3) <= 0;
+    
+    % Plot
+    figure;
+    subplot(2,2,1)
+    rose_plot(az(iLat),i_wrong(iLat),num_bin)
+    title(['Azimuth (lateral) ' num2str(spds(i)) ' cm/s'])
+    
+    subplot(2,2,3)
+    rose_plot(az(iMed),i_wrong(iMed),num_bin)
+    title(['Azimuth (medial) ' num2str(spds(i)) ' cm/s'])
+    
+    subplot(2,2,2)
+    rose_plot(el(iDors),i_wrong(iDors),num_bin)
+    title(['Elevation (dorsal) ' num2str(spds(i)) ' cm/s'])
+    
+    subplot(2,2,4)
+    rose_plot(el(iVent),i_wrong(iVent),num_bin)
+    title(['Elevation (ventral) ' num2str(spds(i)) ' cm/s'])
+    
+    
+end % vis_rose_local
+
+
+%% Visulize rose plots of direction wrt body (vis_rose_local)
+
+if vis_rose_local
 
     % Plot direction (az) for rostrum/tail comparisons   
     %rose_wrt_body(b,r,num_bin,index,r.spd_rost,r.spd_tail,'rost','tail','az')
@@ -894,75 +993,15 @@ if vis_rose
     %rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'right','left','az')
         
     % Plot direction (az) for left/right comparisons with new 'wrong' calc (Bill)   
-    rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'right','left','both')
+    rose_wrt_body(b,r,num_bin,index,r.spd_right,r.spd_left,'az')
     
     % Plot direction (el) for dorsal/ventral comparisons    
     %rose_wrt_body(b,r,num_bin,index,r.spd_dors,r.spd_vent,'dors','vent','el')
 
-    
-end % vis_rose
-
-
-%% Simulate response direction assuming 90 degree direction
-
-if do_simulate
-   
+    scatter_diff(r,index)
     
     
-    %step through speeds
-    for i = 2:3
-
-        
-        %Lateral simulations
-        
-        % Choose index for sequences that have stage 2 data
-        idx = index{i} & ~isnan(b.preyx2(:,2));
-        
-        
-        [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-            i_wrongLR,i_wrongDV,prey_dir] = give_points2(b,idx,latency,spds(i));
-        
-        %determine groups based on lateral position
-        idx_l =  (com1(:,2) > 0.5);
-        idx_m =  (com1(:,2) < 0.5);
-            
-        
-        %determine prey dir in global coords
-        body_dir = rost1 - tail1;
-        body_dir_polar = cart2pol(body_dir(:,1),body_dir(:,2));        
-        
-        spd_left = r.spd_left(idx,1);
-        spd_right = r.spd_right(idx,1);
-        
-        %now calculate predicted azimuth
-        %higher on left if positive
-        spd_diff = spd_left - spd_right;
-        
-        sim_dir = nan(length(idx_l),1);
-        
-        sim_dir(spd_diff > 0) = body_dir_polar(spd_diff > 0) - (pi/2);
-        sim_dir(spd_diff < 0) = body_dir_polar(spd_diff < 0) + (pi/2);
-        
-        
-        rose(sim_dir(idx_l));
-        
-        
-        
-        
-        
-        
-        
-        
-        %Lateral Simulations
-    
-    
-    
-    
-    end
-    
-    
-    
-end
+end % vis_rose_local
 
 
 %% Visualize local flow
@@ -1023,7 +1062,7 @@ if do_localflow
         
         % Get body points for all sequences in current speed
         [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-         i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spds(i));
+         i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
         
         % Index of individuals positioned ventral to predator
         i_vent = com0(:,3)<=0;
@@ -1101,8 +1140,6 @@ if do_localflow
             gbl_uS   = griddata(xS,yS,zS,uS,xptsS,yptsS,zptsS);
             gbl_vS   = griddata(xS,yS,zS,vS,xptsS,yptsS,zptsS);
             gbl_wS   = griddata(xS,yS,zS,wS,xptsS,yptsS,zptsS);
-            
-            clear xptsF yptsF zptsF xptsS yptsS zptsS
              
             % Calculate speed
             gbl_spdF = sqrt(gbl_uF.^2 + gbl_vF.^2 + gbl_wF.^2);
@@ -1120,6 +1157,7 @@ if do_localflow
                               gbl_uS,gbl_vS,gbl_wS);
                           
             clear gbl_uF gbl_vF gbl_wF gbl_uS gbl_vS gbl_wS
+            clear xptsF yptsF zptsF xptsS yptsS zptsS
                           
             % Transform fast start direction wrt prey body
             com2L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com2(j,:));
@@ -1235,101 +1273,459 @@ else
     % Load previous 'L' 
     load([root_path filesep 'behavior' filesep 'localflow data'])
     
-end % do_bodycue
+end % do_localflow
+
+
+%% Visualize local flow 2D
+
+
+if do_localflow2D
+    
+    % Number of points along the x-axis of the body
+    num_xpts = 20;
+    
+    % Range of points along x-axis of body (in body lengths)
+    x_rangeL = [-.5 1.5];
+    
+    % Range of points along y-axis of body (in body lengths)
+    y_rangeL = [-0.5 0.5];
+    
+    % Range of points along the z-axis of body (in body lengths)
+    z_rangeL = [-.5 .5];
+    
+    % Color of predator
+    p_clr = .6.*[1 1 1];
+    
+    % Color of surface
+    s_clr = [102 102 255]./255;
+    
+    % Good "representative" sequences (for 11 cm/s)
+    g_seq = [2 10 15 17];
+    
+    alpha_val = 0.3;
+    
+    % Load predator body morphology data
+    load([root_path filesep 'morphology' filesep 'Pred3Dbodyshape.mat'])
+    
+    % Load prey morphology daat, define dimensions ('m')
+    load([root_path filesep 'morphology' filesep '6_02_L19_metrics.mat']);
+    
+    % Define 3d data for prey in local FOR
+    [pX,pY,pZ] = prey_surf(m.s,m.h,m.w,m.c,numPts_circ); 
+    clear m
+    
+    % Create figure window
+    f1 = figure;
+    
+    % Subplot
+    %subplot(4,2,[1 3 5 7])
+    
+    % Render the predator body
+    h1 = patch(real(pred3DshapeX),real(pred3DshapeY),...
+        real(pred3DshapeZ),real(pred3DshapeX)*0);
+    
+    set(h1,'FaceLighting','gouraud',...
+        'LineStyle','none',...
+        'BackFaceLighting','reverselit',...
+        'FaceColor',p_clr,...
+        'AmbientStrength',.5);
+    
+    view(2)
+    light('position',[60,60,0])
+    %light('position',[0,-60,60])
+    light('position',[0,-60,-30])
+    %xlim([-1 1.5])
+    
+    set(gca,'XColor','w')
+    set(gca,'YColor','w')
+    set(gca,'ZColor','w')
+    zoom(1.75)
+    
+    
+    % Index for approach speed
+    i = 2;
+    
+    % Load CFD data in 'cR' structure
+    load(cfd_path{i})
+    
+    % Choose index for sequences that have stage 2 data
+    idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+        & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+    
+    % Sequence numbers
+    seqs = find(idx);
+    
+    % Get body points for all sequences in current speed
+    [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+        i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
+    
+    % Index of individuals positioned ventral to predator
+    i_vent = com0(:,3)<=0;
+    
+    % Index of all wrong directions based on distance from axis
+    % extending from predator midline (Bill)
+    
+    %calculate dist from mildline at t1 and t2
+    dist1 = (com1(:,2).^2 + com1(:,3).^2).^0.5;
+    dist2 = (com2(:,2).^2 + com2(:,3).^2).^0.5;
+    
+    %those going in wrong direction have smaller d2
+    i_wrong = dist2 < dist1;
+    
+    clear dist1 dist2
+    
+    % Step thru each sequence for current speed
+    for k = 1:length(g_seq);
+        
+        j = g_seq(k);
+        
+        % Body length of prey
+        blength = norm([tail0(j,1)-rost0(j,1) ...
+            tail0(j,2)-rost0(j,2) ...
+            tail0(j,3)-rost0(j,3)]);
+        
+        % Range of volume to interrogate
+        rangeX   = [com0(j,1)-blength*sclfactr_bod ...
+            com0(j,1)+blength*sclfactr_bod];
+        rangeY   = [com0(j,2)-blength*sclfactr_bod ...
+            com0(j,2)+blength*sclfactr_bod];
+        rangeZ   = [com0(j,3)-blength*sclfactr_bod ...
+            com0(j,3)+blength*sclfactr_bod];
+        subRange = [rangeX(1) rangeX(2) ...
+            rangeY(1) rangeY(2) ...
+            rangeZ(1) rangeZ(2)];
+        
+        % Reduce flow field to small volume
+        [xS,yS,zS,uS]   = subvolume(cR.x,cR.y,cR.z,cR.u,subRange);
+        [xS,yS,zS,vS]   = subvolume(cR.x,cR.y,cR.z,cR.v,subRange);
+        [xS,yS,zS,wS]   = subvolume(cR.x,cR.y,cR.z,cR.w,subRange);
+        
+        clear rangeX rangeY rangeZ subRange
+        
+        % Define points for the frontal plane of the body
+        x_valsF = linspace(blength*x_rangeL(1),...
+            blength*x_rangeL(2),...
+            num_xpts)';
+        y_valsF = [blength*y_rangeL(1):...
+            mean(diff(x_valsF)):...
+            blength*y_rangeL(2)]';
+        
+        % Meshgrid the frontal plane coordinates
+        [x2F,y2F,z2F] = meshgrid(x_valsF,y_valsF,0);
+        
+        % Transform coordinates from local to global systems
+        [xptsF,yptsF,zptsF] = local_to_global_matrix(rost0(j,:),...
+            com0(j,:),tail0(j,:),x2F,y2F,z2F);
+        
+        % Interpolate to get flow velocities (frontal plane)
+        gbl_uF   = griddata(xS,yS,zS,uS,xptsF,yptsF,zptsF);
+        gbl_vF   = griddata(xS,yS,zS,vS,xptsF,yptsF,zptsF);
+        gbl_wF   = griddata(xS,yS,zS,wS,xptsF,yptsF,zptsF);
+        
+        % Calculate speed
+        gbl_spdF = sqrt(gbl_uF.^2 + gbl_vF.^2 + gbl_wF.^2);
+        
+        % Transform velocities back to local system
+        [uF,vF,wF] = global_to_local_flow(rost0(j,:),...
+            com0(j,:),tail0(j,:),...
+            xptsF,yptsF,zptsF,...
+            gbl_uF,gbl_vF,gbl_wF);
+        
+        clear gbl_uF gbl_vF gbl_wF
+        clear xptsF yptsF zptsF
+        
+        % Transform fast start direction wrt prey body
+        com2L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com2(j,:));
+        com1L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com1(j,:));
+        
+        % Calculate fast start direction from local FOR
+        prey_dirL(:,1) = com2L(:,1) - com1L(:,1);
+        prey_dirL(:,2) = com2L(:,2) - com1L(:,2);
+        prey_dirL(:,3) = com2L(:,3) - com1L(:,3);
+        
+        % Angle of response wrt body
+        [az_dir,el_dir,r_dir] = cart2sph(prey_dirL(1),...
+            prey_dirL(2),prey_dirL(3));
+        
+        
+        % PLOT RESULTS ------------------------------------------------
+        
+        figure(f1);
+        %subplot(4,2,[1 3 5 7])
+        
+        if k==1
+            % Isosurface
+            [faces,verts] = isosurface(cR.x,cR.y,cR.z,smooth3(cR.spd),spd_thresh);
+            p = patch('Vertices', verts, 'Faces', faces, ...
+                'FaceColor','interp', ...
+                'edgecolor', 'interp');
+            set(p,'FaceColor',s_clr,'EdgeColor','none');
+            daspect([1,1,1])
+            %view(3);
+            axis tight
+            %camlight
+            lighting gouraud
+            alpha(p,alpha_val)
+            xlims = xlim;
+            ylims = ylim;
+            zlims = zlim;
+            hold on
+            %xlabel('x'),ylabel('y'),zlabel('z')
+        end
+        
+        % This is supposed to smooth the surface plot
+        %isonormals(cR.x,cR.y,cR.z,cR.spd,p);
+        
+        hG = plot3(...
+            [com1(j,1) com2(j,1)],...
+            [com1(j,2) com2(j,2)],...
+            [com1(j,3) com2(j,3)],'r-');
+        set(hG,'LineWidth',0.5)
+        
+        % Body length of prey
+        blength = norm([tail0(j,1)-rost0(j,1) ...
+            tail0(j,2)-rost0(j,2) ...
+            tail0(j,3)-rost0(j,3)]);
+        
+        % Returns coordinates for prey body in global FOR
+        [pXg,pYg,pZg] = prey_global(rost1(j,:),com1(j,:),tail1(j,:),...
+            pX,pY,pZ);
+        
+        % Render the prey
+        h1 = patch(real(pXg),real(pYg),real(pZg),real(pZg)*0);
+        
+        % Set properties
+        set(h1,'FaceLighting','gouraud',...
+            'LineStyle','none',...
+            'BackFaceLighting','reverselit',...
+            'FaceColor',preyColor,...
+            'AmbientStrength',.5);
+        
+        hold on
+        
+        
+        fname = ['img' num2str(k)];
+        
+        f2 = figure;
+        
+        %subplot(4,1,2*k)
+        
+        % Plot frontal plane
+        %subplot(2,1,1)
+        hp = pcolor(x2F,y2F,gbl_spdF);
+        axis equal
+        shading interp;
+        caxis([0 .2])
+        colorbar
+        
+        set(gca,'XColor','w')
+        set(gca,'YColor','w')
+        set(gca,'ZColor','w')
+
+        
+        print(f2,'-djpeg',[root_path filesep 'figures' filesep fname '.jpeg'])
+        
+        
+        %alpha(0.5)
+        %hold on
+        
+        %subplot(2,1,2)
+        h = quiver(x2F,y2F,uF,vF,0.5,'k');
+        axis equal
+        hold on
+        
+        % Render the prey
+        h1 = patch(real(pX),real(pY),real(pZ)*0);
+        
+        % Set properties
+        set(h1,...
+            'LineStyle','none',...
+            'FaceColor','k',...
+            'AmbientStrength',.5);
+        
+        hold on
+        %light('position',[60,60,0])
+        
+        % Plot response vector
+        h = plot([0 prey_dirL(1)]+com1L(1),[0 prey_dirL(2)],'r-');
+        set(h(1),'LineWidth',0.5)
+        
+       % shading interp;
+        
+       if k==4
+        %colorbar('SouthOutside')
+       end
+       
+        title([num2str(spds(i)) ' cm/s, j = ' num2str(j)])
+        
+        set(gca,'XColor','w')
+        set(gca,'YColor','w')
+        set(gca,'ZColor','w')
+    %zoom(1.75)
+        
+        print(f2,'-depsc',[root_path filesep 'figures' filesep fname '.eps'])
+        
+        %pause(1)
+        
+        close(f2)
+    end
+    
+    set(gca,'XColor','w')
+    set(gca,'YColor','w')
+    set(gca,'ZColor','w')
+    
+end % do_localflow2D
+
+
+%% Plot 3D spatial distibution of responders (do_3D)
+
+if do_position  
+    
+    % Color of correct direction
+    c_clr = [0 127 0]./255;
+    
+    % Color of wrong direction
+    w_clr = [255 0 0]./255;
+    
+    % Colors for each speed
+    c_spd = [1 0 1;.5 .5 0;0 .5 1];
+        
+    % New Figure window
+    figure 
+        
+    % Step through each speed
+    for i = 1:3
+        
+        % Load CFD data in 'cR' strcuture
+        load(cfd_path{i})
+                
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+              & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+        
+        % Get body points for all seqnences in current speed
+        [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+            i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
+                
+        % 3D plot of speed and resposes -----------------------------------
+        
+        % Plot of position at response
+        %subplot(1,2,1)
+        
+        for j = 1:size(com1,1)
+            subplot(2,1,1)
+            % Plot location of larvae
+            h = plot(com1(j,1),abs(com1(j,2)),'o');
+            set(h,'Color',c_spd(i,:))
+            hold on
+            axis equal
+            
+            subplot(2,1,2)
+            % Plot location of larvae
+            h = plot(com1(j,1),com1(j,3),'o');
+            set(h,'Color',c_spd(i,:))
+            hold on
+            axis equal
+            
+            % Remove location of larvae
+            %delete(h)
+        end
+
+        %title(['Speed (' num2str(spds(i)) ' cm/s)'])
+        xlims = xlim;
+        ylims = ylim;
+        zlims = zlim;
+        
+        pause(1)
+    end   
+    
+    %set(gca,'XColor','w')
+    %set(gca,'YColor','w')
+    %set(gca,'ZColor','w')
+    %zoom(1.75)
+    
+    
+end
 
 
 
+function rose_plot(az,wrong,num_bin)
+    
+% Rose plot in correct direction
+h = rose(az(~wrong),num_bin);
+set(h,'Color','g')
+hold on
+
+% Rose plot of wrong direction
+if sum(wrong)>0
+    h = rose(az(wrong),num_bin);
+    set(h,'Color','r')
+end
+
+% Calculate and plot mean and CIs
+[mu,l1,l2] = circ_mean(az);
+h = polar([mu mu],[0 max(abs(ylim))]);
+set(h,'Color','k')
+h = polar([l1 l1],[0 max(abs(ylim))]);
+set(h,'Color','k')
+set(h,'LineStyle','--')
+h = polar([l2 l2],[0 max(abs(ylim))]);
+set(h,'Color','k')
+set(h,'LineStyle','--')
 
 
-
-
-
-function rose_wrt_body(b,r,num_bin,index,spd1,spd2,txt1,txt2,angl)
+function rose_wrt_body(b,r,num_bin,index,R_spd,L_spd,angl)
 % Creates rose plots of response diretcion wrt the prey body for different
 % categories that are defined by differences in flow along two regions of
 % the body
-      
-% List of all usable sequences
-seqs = find(~isnan(b.preyx2(:,2)));
 
 % Speed values
 spds = [2 11 20];
-    
-if strcmp(angl,'both') %Bill's addition
+
+% Define angle
+if strcmp(angl,'az')
     dir = r.az_dir;
-    wrong = r.wrong;
-    
+elseif strcmp(angl,'el')
+    dir = r.el_dir;
 else
-    error('unrecognized "angle" input -- should be "az" or "el" or "both"')
+    error('angle not recognized')
 end
 
-
-% Vector to keep track of which have 1 being greater than 2
-one_more = nan(length(spd1),1);
+% Define max on each side of body for all seqs
+for i = 1:length(R_spd)
+    if isempty(R_spd{i})
+        Rmax(i,1) = nan;
+    else
+        Rmax(i,1) = max(R_spd{i});
+    end
     
-% Loop through squences, mark where one is greater
-for i = 1:length(seqs)
-
-        % Difference in speed between 1 and 2
-        Dspd = spd1{seqs(i)} - spd2{seqs(i)};
-        
-        % Idenx of position where greatest
-        iBod = find(abs(Dspd)==max(abs(Dspd)),1,'first');
-        
-        % Update 'one_more'
-        if Dspd(iBod)<0
-            one_more(seqs(i)) = 0;
-        else
-            one_more(seqs(i)) = 1;
-        end 
+    if isempty(L_spd{i})
+        Lmax(i,1) = nan;
+    else
+        Lmax(i,1) = max(L_spd{i});
+    end   
 end
-
-figure
 
 % Step through each speed
 for i = 1:3
     
+    % Index for right > left
+    idx = index{i} & ~isnan(Rmax) & ~isnan(dir) & (Rmax>Lmax);
     
-    % Index for spd1>spd2 & 'correct' direction ---------------------------
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==1) & ~wrong;
-    
-    % Plot 
+    % Plot
     subplot(2,3,i)
-    rose(dir(idx),num_bin)
-    title([num2str(spds(i)) ' cm/s ' txt1 ' > ' txt2])
-    hold on
-    xlabel(angl)
+    rose_plot(dir(idx),r.wrong(idx)==1,num_bin);
+    title([num2str(spds(i)) ' cm/s  R > L'])
     
-    
-    % Index for spd1>spd2 & 'wrong' direction -----------------------------
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==1) & wrong;
+    % Index for left > right
+    idx = index{i} & ~isnan(Rmax) & ~isnan(dir) & (Rmax<Lmax);
     
     % Plot
-    hR = rose(dir(idx),num_bin);
-    set(hR,'Color','r')
-    
-    
-    % Index for spd1<spd2 & 'correct' direction ---------------------------
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==0) & ~wrong;
-    
-    % Plot 
     subplot(2,3,3+i)
-    rose(dir(idx),num_bin)
-    title([num2str(spds(i)) ' cm/s ' txt1 ' < ' txt2])
-    xlabel(angl)
-    hold on
-    
-    
-    % Index for spd1<spd2 & 'wrong' direction -----------------------------
-    idx = index{i} & ~isnan(b.preyx2(:,2)) & (one_more==0) & wrong;
-    
-    % Plot
-    hR = rose(dir(idx),num_bin);
-    set(hR,'Color','r')
+    rose_plot(dir(idx),r.wrong(idx)==1,num_bin);
+    title([num2str(spds(i)) ' cm/s  R < L'])
     
 end
-
-
 
 
 function ptsT = global_to_local(rost,com,tail,pts)
@@ -1700,8 +2096,50 @@ axis square
 legend('2','11','20','Location','NorthWest') 
 
 
+function scatter_diff(r,index)
+% Look at relationship between velocity difference and response angle
+
+% List of all usable sequences
+seqs = find(~isnan(r.az_dir));
+
+% Speed values
+spds = [2 11 20];
+
+% Empty vector of L/R speed differences
+Dspd = nan(length(r.az_dir),1);
+
+% Loop through squences, recording difference in speed
+for i = 1:length(seqs)
+    
+    % Difference in speed between 1 and 2
+    cDiff = r.spd_left{seqs(i)} - r.spd_right{seqs(i)};
+        
+    % Idenx of position where greatest
+    iBod = find(abs(cDiff)==max(abs(cDiff)),1,'first');
+    
+    % Difference in speed between 1 and 2
+    Dspd(seqs(i)) = cDiff(iBod);
+    
+end
+
+% Index of usable points for each speed
+idx{1} = index{1} & ~isnan(r.az_dir);
+idx{2} = index{2} & ~isnan(r.az_dir);
+idx{3} = index{3} & ~isnan(r.az_dir);
+
+
+figure
+
+plot(Dspd(idx{1}),(180/pi).*r.az_dir(idx{1}),'ro',...
+     Dspd(idx{2}),(180/pi).*r.az_dir(idx{2}),'bo',...
+     Dspd(idx{3}),(180/pi).*r.az_dir(idx{3}),'go')
+ylabel('azimuth (deg)')
+xlabel('difference in L-R velocity')
+legend('2','11','20','Location','NorthWest') 
+
+     
 function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-           i_wrongLR,i_wrongDV,prey_dir] = give_points(b,idx,latency,spd)
+           i_wrong,prey_dir] = give_points(b,idx,latency,spd)
 % Returns the points of the prey body for all sequences denoted by 'idx'
        
 % Offset in x, due to latency
@@ -1727,90 +2165,15 @@ prey_dir(:,1) = com2(:,1) - com1(:,1);
 prey_dir(:,2) = com2(:,2) - com1(:,2);
 prey_dir(:,3) = com2(:,3) - com1(:,3);
 
-% Transform prey direction, assuming mirror symmetry about the predator
-% prey_dir(com1(:,2)<0,2) = -prey_dir(com1(:,2)<0,2);
-
-% % Transform body points, assuming mirror symmetry about the predator
-% rost0(:,2)  = abs(rost0(:,2));
-% com0(:,2)   = abs(com0(:,2));
-% tail0(:,2)  = abs(tail0(:,2));
-% 
-% rost1(:,2)  = abs(rost1(:,2));
-% com1(:,2)   = abs(com1(:,2));
-% tail1(:,2)  = abs(tail1(:,2));
-% 
-% rost2(:,2)  = abs(rost2(:,2));
-% com2(:,2)   = abs(com2(:,2));
-% tail2(:,2)  = abs(tail2(:,2));
+% Calculate dist from midline at t1 and t2
+dist1 = sqrt(com1(:,2).^2 + com1(:,3).^2);
+dist2 = sqrt(com2(:,2).^2 + com2(:,3).^2);
 
 % Index of individuals positioned ventral to predator
 i_vent = com0(:,3)<=0;
 
-% Index of L-R responses in the 'wrong' direction
-i_wrongLR = prey_dir(:,2)<0;
-
-% Index of D-V responses in the 'wrong' direction
-i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
-    (~i_vent & (prey_dir(:,3)<=0));
-
-
-function  [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
-           i_wrongLR,i_wrongDV,prey_dir] = give_points2(b,idx,latency,spd)
-% Returns the points of the prey body for all sequences denoted by 'idx'
-%this is different than give_pointd because mirror symmetry does not effect
-%the negative values in front of predator
-
-
-% Offset in x, due to latency
-lat_offset = latency * spd;
-
-% Position (wrt predator) of body points when flow sensed
-rost0 = [b.preyx(idx,1)+lat_offset b.preyy(idx,1) b.preyz(idx,1)];
-com0  = [b.preyx(idx,2)+lat_offset b.preyy(idx,2) b.preyz(idx,2)];
-tail0 = [b.preyx(idx,3)+lat_offset b.preyy(idx,3) b.preyz(idx,3)];
-
-% Position (wrt predator) of body points when larva first moves
-rost1 = [b.preyx(idx,1) b.preyy(idx,1) b.preyz(idx,1)];
-com1  = [b.preyx(idx,2) b.preyy(idx,2) b.preyz(idx,2)];
-tail1 = [b.preyx(idx,3) b.preyy(idx,3) b.preyz(idx,3)];
-
-% Position (wrt predator) of body points at end of stage 2
-rost2 = [b.preyx2(idx,1) b.preyy2(idx,1) b.preyz2(idx,1)];
-com2  = [b.preyx2(idx,2) b.preyy2(idx,2) b.preyz2(idx,2)];
-tail2 = [b.preyx2(idx,3) b.preyy2(idx,3) b.preyz2(idx,3)];
-
-% Find direction of response
-prey_dir(:,1) = com2(:,1) - com1(:,1);
-prey_dir(:,2) = com2(:,2) - com1(:,2);
-prey_dir(:,3) = com2(:,3) - com1(:,3);
-
-% Transform prey direction for those at y < -0.5, assuming mirror symmetry
-%about the predator
-prey_dir(com1(:,2)<-.5,2) = -prey_dir(com1(:,2)<-.5,2);
-
-% Transform body points, assuming mirror symmetry about the predator for
-% those positioned at y < -.5
-rost0(com1(:,2)<-.5,2)  = abs(rost0(com1(:,2)<-.5,2));
-com0(com1(:,2)<-.5,2)   = abs(com0(com1(:,2)<-.5,2));
-tail0(com1(:,2)<-.5,2)  = abs(tail0(com1(:,2)<-.5,2));
-
-rost1(com1(:,2)<-.5,2)  = abs(rost1(com1(:,2)<-.5,2));
-com1(com1(:,2)<-.5,2)   = abs(com1(com1(:,2)<-.5,2));
-tail1(com1(:,2)<-.5,2)  = abs(tail1(com1(:,2)<-.5,2));
-
-rost2(com1(:,2)<-.5,2)  = abs(rost2(com1(:,2)<-.5,2));
-com2(com1(:,2)<-.5,2)   = abs(com2(com1(:,2)<-.5,2));
-tail2(com1(:,2)<-.5,2)  = abs(tail2(com1(:,2)<-.5,2));
-
-% Index of individuals positioned ventral to predator
-i_vent = com0(:,3)<=0;
-
-% Index of L-R responses in the 'wrong' direction
-i_wrongLR = prey_dir(:,2)<0;
-
-% Index of D-V responses in the 'wrong' direction
-i_wrongDV = (i_vent & (prey_dir(:,3)>0)) |  ...
-    (~i_vent & (prey_dir(:,3)<=0));
+% Index of responses in the 'wrong' direction
+i_wrong = dist2 < dist1;
 
 
 function plot_prey_pos(f,spd_index)
@@ -1870,4 +2233,152 @@ pos(:,3) = mean([verts(faces(:,1),3) ...
     verts(faces(:,2),3) ...
     verts(faces(:,3),3)],2);
 
+
+function [X,Y,Z]= prey_surf(s,h,w,c,numPts)
+% Provides 3d coordinates of the body
+
+% Define radial positions along vector
+theta = linspace(0,2*pi,numPts)';
+
+% Define empty vectors for coordinates
+x=[];y=[];z=[];
+
+% Make mouth cap  _______________________________________
+n = numPts/10;
+phi = linspace(0,.75*pi/2,n)';
+ds = .02.*range(s); %2*s(2)-s(1);
+%sC = linspace(s(1)-ds,s(1),n);
+hC = h(1) .* sin(phi)./max(sin(phi));
+wC = w(1) .* sin(phi)./max(sin(phi));
+sC = -(ds.*cos(phi)-ds.*cos(phi(end)));
+
+% Loop down the body length
+for i=1:length(sC)-1  
+    
+  % Draw first ellipse   
+    yTemp1 = sC(i)*ones(size(theta));
+    xTemp1 = (wC(i)/2) .* cos(theta);
+    zTemp1 = (hC(i)/2) .* sin(theta) + c(1);
+    
+  % Draw second ellipse  
+    yTemp2 = sC(i+1)*ones(size(theta));
+    xTemp2 = (wC(i+1)/2) .* cos(theta);
+    zTemp2 = (hC(i+1)/2) .* sin(theta) + c(1);
+    
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
+end 
+
+clear xTemp1 yTemp1 zTemp1 xTemp2 yTemp2 zTemp2
+clear n phi ds sC hC wC
+
+
+% Make body coordinates _______________________________________
+
+% Loop down the body length
+for i=1:length(s)-1  
+    
+  % Draw first ellipse  
+    yTemp1      = s(i)*ones(size(theta));
+    xTemp1      = (w(i)/2) .* cos(theta);
+    zTemp1      = (h(i)/2) .* sin(theta) + c(i);
+    
+  % Draw second ellipse    
+    yTemp2      = s(i+1)*ones(size(theta));
+    xTemp2      = (w(i+1)/2) .* cos(theta);
+    zTemp2      = (h(i+1)/2) .* sin(theta) + c(i+1);
+    
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
+end  
+
+% Make tail cap  _______________________________________
+n = numPts/10;
+phi = linspace(0,0.75*pi/2,n)';
+ds = .02.*range(s); %2*s(2)-s(1);
+%sC = linspace(s(1)-ds,s(1),n);
+hC = h(end) .* sin(phi)./max(sin(phi));
+wC = w(end) .* sin(phi)./max(sin(phi));
+sC = s(end) + ds.*cos(phi)-+ ds.*cos(phi(end));
+
+% Loop down the body length
+for i=1:length(sC)-1  
+    
+  % Draw first ellipse   
+    yTemp1 = sC(i)*ones(size(theta));
+    xTemp1 = (wC(i)/2) .* cos(theta);
+    zTemp1 = (hC(i)/2) .* sin(theta) + c(end);
+    
+  % Draw second ellipse  
+    yTemp2 = sC(i+1)*ones(size(theta));
+    xTemp2 = (wC(i+1)/2) .* cos(theta);
+    zTemp2 = (hC(i+1)/2) .* sin(theta) + c(end);
+    
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
+end 
+
+clear xTemp1 yTemp1 zTemp1 xTemp2 yTemp2 zTemp2
+clear n phi ds sC hC wC
+
+% Transform for units and wrt rostrum
+X  = (y-min(y(:))).*100;
+Y  = x.*100;
+Z  = -(z-z(1)+max(h(:))/2).*100;
+
+
+function [pXg,pYg,pZg] = prey_global(rost,com,tail,pX,pY,pZ)
+% Transforms prey points in global FOR
+
+tmp1 = local_to_global(rost,com,tail,...
+                        [pX(1,:)' pY(1,:)' pZ(1,:)']);
+tmp2 = local_to_global(rost,com,tail,...
+                        [pX(2,:)' pY(2,:)' pZ(2,:)']);
+tmp3 = local_to_global(rost,com,tail,...
+                        [pX(3,:)' pY(3,:)' pZ(3,:)']);
+tmp4 = local_to_global(rost,com,tail,...
+                        [pX(4,:)' pY(4,:)' pZ(4,:)']);
+
+pXg = [tmp1(:,1)'; tmp2(:,1)'; tmp3(:,1)'; tmp4(:,1)'];
+pYg = [tmp1(:,2)'; tmp2(:,2)'; tmp3(:,2)'; tmp4(:,2)'];
+pZg = [tmp1(:,3)'; tmp2(:,3)'; tmp3(:,3)'; tmp4(:,3)'];
 
