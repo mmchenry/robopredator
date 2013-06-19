@@ -3,16 +3,19 @@ function run_sims(root_path)
 % predators
 
 % Calculate flow around larvae for simulations (takes a long time)
-do_flow = 0;
+do_flow = 1;
 
 % Make 3D plot of results (note: use simulations with spare sampling)
 vis_3D = 0;
 
-% Test the effects of a variety of algorithms
+% Test the effects of response wrt fixed angle of the body
 do_algo_fixed = 0;
 
 % Test the effects of a variety of algorithms
 do_algo_rand = 0;
+
+% Test algo where the larva moves in direction of velocity
+do_algo_vel = 0;
 
 % Index for approach speed to analyze
 iSpeed = 2;
@@ -63,8 +66,12 @@ simalgo_rand_path{3} = [root_path filesep 'simulations' filesep 'algorand data 2
 % Speeds
 spds = [2 11 20];
 
-% Number of prey positions to consider along y-axis
-num_y = 30;
+% Number of start angles
+num_ang = 50;
+
+% Number of prey positions to consider along y-axis 
+% (determines spatial sampling density for simulations)
+num_y = 20;
 
 % Modeled threshold of speed
 spd_thresh = .07;
@@ -76,8 +83,8 @@ bow_alpha = 0.5;
 p_clr = .5.*[1 1 1];
 
 % Start angles (rad)
-start_ang = linspace(-pi,pi,36)';
-start_ang = start_ang(1:end-1);
+%start_ang = linspace(-pi,pi,36)';
+%start_ang = start_ang(1:end-1);
 
 % Position of body points in local coordinates
 rostL = [0 0 0];
@@ -129,6 +136,7 @@ n = 1;
 % Loop through speeds
 for i = 1:3
     
+    start_ang = 2*pi*(rand(num_ang,1)-.5);
     
     % Find coordinates of larvae at bow wave ------------------------------
     
@@ -225,6 +233,9 @@ for i = 1:3
         
         % Reduce flow field to small volume
         [xS,yS,zS,spdS] = subvolume(cR.x,cR.y,cR.z,cR.spd,subRange);
+        [xS,yS,zS,uS]   = subvolume(cR.x,cR.y,cR.z,cR.u,subRange);
+        [xS,yS,zS,vS]   = subvolume(cR.x,cR.y,cR.z,cR.v,subRange);
+        [xS,yS,zS,wS]   = subvolume(cR.x,cR.y,cR.z,cR.w,subRange);
             
         % Loop through each angular position
         for k = 1:length(start_ang)
@@ -248,8 +259,11 @@ for i = 1:3
             % Package points for griddata
             pnts = [l_pt; r_pt];
             
-            % Interpolate CFD data for speed 
+            % Interpolate CFD data for speed/velocity 
             spd_vals = griddata(xS,yS,zS,spdS,pnts(:,1),pnts(:,2),pnts(:,3));
+            u_vals   = griddata(xS,yS,zS,uS,pnts(:,1),pnts(:,2),pnts(:,3));
+            v_vals   = griddata(xS,yS,zS,vS,pnts(:,1),pnts(:,2),pnts(:,3));
+            w_vals   = griddata(xS,yS,zS,wS,pnts(:,1),pnts(:,2),pnts(:,3));
             
             % Check output
             if max(isnan(spd_vals))
@@ -259,8 +273,13 @@ for i = 1:3
             % Speed values at different spots on the body
             spd_left  = spd_vals(1:length(l_pt));
             spd_right = spd_vals((length(l_pt)+1):(length(l_pt)+length(r_pt)));  
+            u_left    = u_vals(1:length(l_pt));
+            u_right   = u_vals((length(l_pt)+1):(length(l_pt)+length(r_pt)));  
+            v_left    = v_vals(1:length(l_pt));
+            v_right   = v_vals((length(l_pt)+1):(length(l_pt)+length(r_pt)));  
+            w_left    = w_vals(1:length(l_pt));
+            w_right   = w_vals((length(l_pt)+1):(length(l_pt)+length(r_pt)));  
            
-            
             % Store data           
             sim.spd(n,1)    = spds(i);
             sim.rostG(n,:)  = [Xvals(j) Yvals(j) Zvals(j)];
@@ -270,6 +289,12 @@ for i = 1:3
             sim.s{n}        = s;
             sim.spd_r{n}    = spd_right;
             sim.spd_l{n}    = spd_left;
+            sim.u_r{n}      = u_right;
+            sim.v_r{n}      = v_right;
+            sim.w_r{n}      = w_right;
+            sim.u_l{n}      = u_left;
+            sim.v_l{n}      = v_left;
+            sim.w_l{n}      = w_left;
             
             % Increment index
             n = n + 1;
@@ -592,6 +617,144 @@ if do_algo_rand
 end
 
 
+%% Simulate response for different behavioral algorithms (velocity)
+
+if do_algo_vel
+
+    % Loop through speeds
+    for i = 1:3
+        
+        % Load flow data 'sim'
+        load(simflow_path{i})
+        
+        algo.away_rand = [];
+        algo.tow_rand = [];
+        algo.rand_rand = [];
+        
+        % Loop thru simulations
+        for j = 1:length(sim.spd)
+            
+            % Random angle
+            ang_rand = rand(1)*pi;
+            
+            % Index of body position with max flow
+            iBod = find(sim.spd_r{j} == max(sim.spd_r{j}),1,'first');
+            
+            % Adjust sign of algorithm, according to side with higher flow
+            if sim.spd_r{j}(iBod) > sim.spd_l{j}(iBod)
+                ang_away = - (pi - ang_rand);
+                ang_tow  = (pi - ang_rand);
+                
+            elseif max(isnan(sim.spd_r{j}(iBod))) || max(isnan(sim.spd_r{j}(iBod)))
+                error('There are nans in the flow data');
+                
+            else
+                ang_away = (pi - ang_rand);
+                ang_tow  = - (pi - ang_rand);   
+            end
+            
+            % Random selection of toward or away
+            if rand(1)>.5
+                ang_rand = ang_tow;
+            else
+                ang_rand = ang_away;
+            end            
+            
+            % Algorithm: Side away, fixed angle ------------------------------------
+            
+            % Displacement in local system
+            pos2L(1,1) =  FS_dist*cos(ang_away) + comL(1);
+            pos2L(1,2) =  FS_dist*sin(ang_away) + comL(2);
+            pos2L(1,3) = 0;
+            
+            % Store results
+            algo.away_rand = give_algo_res(sim,algo.away_rand,pos2L,ang_away,lat_pos,j);
+            
+            clear pos2L
+            
+            % Algorithm: Side toward, fixed angle ----------------------------------
+            
+            % Displacement in local system
+            pos2L(1,1) =  FS_dist*cos(ang_tow) + comL(1);
+            pos2L(1,2) =  FS_dist*sin(ang_tow) + comL(2);
+            pos2L(1,3) = 0;
+            
+            algo.tow_rand = give_algo_res(sim,algo.tow_rand,pos2L,ang_tow,lat_pos,j);
+            
+            clear pos2L
+            
+            % Algorithm: Side rand, fixed angle ----------------------------------
+            
+            % Displacement in local system
+            pos2L(1,1) =  FS_dist*cos(ang_rand) + comL(1);
+            pos2L(1,2) =  FS_dist*sin(ang_rand) + comL(2);
+            pos2L(1,3) = 0;
+            
+            algo.rand_rand = give_algo_res(sim,algo.rand_rand,pos2L,ang_rand,lat_pos,j);
+            clear pos2L
+            
+            % Visualize to check calculations
+            if 0
+
+               subplot(2,3,1)
+               plot([comL(1) FS_dist*cos(ang_away) + comL(1)],...
+                    [comL(2) FS_dist*sin(ang_away) + comL(2)],'k-',...
+                    [0 4e-1],[0 0],'r-',0,0,'or')
+                title('side away, fixed, local')
+               axis equal
+               
+               subplot(2,3,2)
+               plot([comL(1) FS_dist*cos(ang_tow) + comL(1)],...
+                    [comL(2) FS_dist*sin(ang_tow) + comL(2)],'k-',...
+                    [0 4e-1],[0 0],'r-',0,0,'or')
+                title('size toward, fixed, local')
+               axis equal
+               
+               subplot(2,3,3)
+               plot([comL(1) FS_dist*cos(ang_rand) + comL(1)],...
+                    [comL(2) FS_dist*sin(ang_rand) + comL(2)],'k-',...
+                    [0 4e-1],[0 0],'r-',0,0,'or')
+                title('side rand, fixed, local')
+               axis equal
+               
+               subplot(2,3,4)
+               plot([algo.away_rand.rost1(end,1) algo.away_rand.tail1(end,1)],...
+                    [algo.away_rand.rost1(end,2) algo.away_rand.tail1(end,2)],'r-',...
+                    algo.away_rand.rost1(end,1),algo.away_rand.rost1(end,2),'or',...
+                    [algo.away_rand.com1(end,1) algo.away_rand.com2(end,1)],...
+                    [algo.away_rand.com1(end,2) algo.away_rand.com2(end,2)],'k-')
+                title('side away, fixed, global')
+               axis equal
+               
+               subplot(2,3,5)
+               plot([algo.tow_rand.rost1(end,1) algo.tow_rand.tail1(end,1)],...
+                    [algo.tow_rand.rost1(end,2) algo.tow_rand.tail1(end,2)],'r-',...
+                    algo.tow_rand.rost1(end,1),algo.tow_rand.rost1(end,2),'or',...
+                    [algo.tow_rand.com1(end,1) algo.tow_rand.com2(end,1)],...
+                    [algo.tow_rand.com1(end,2) algo.tow_rand.com2(end,2)],'k-')
+                title('size toward, fixed, global')
+               axis equal
+               
+               subplot(2,3,6)
+               plot([algo.rand_rand.rost1(end,1) algo.rand_rand.tail1(end,1)],...
+                    [algo.rand_rand.rost1(end,2) algo.rand_rand.tail1(end,2)],'r-',...
+                     algo.rand_rand.rost1(end,1),algo.rand_rand.rost1(end,2),'or',...
+                    [algo.rand_rand.com1(end,1) algo.rand_rand.com2(end,1)],...
+                    [algo.rand_rand.com1(end,2) algo.rand_rand.com2(end,2)],'k-')
+                title('side rand, fixed, global')
+               axis equal
+            end       
+          end
+        
+        % Save
+        disp(['Saving results for ' num2str(spds(i)) ' cm/s'])
+        save(simalgo_rand_path{i},'algo')
+        
+        clear sim algo
+    end         
+end
+
+
 %% Visualize results
 
 if vis_3D
@@ -647,6 +810,7 @@ for i = 1:3
     
     clear algo
 end
+
 
 %% Analysis: Percentage correct (rand)
 

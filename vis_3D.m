@@ -717,25 +717,11 @@ if do_localflow
     
     % Prey number
    % n = prey(j);
-    
-
-%     % Tranformed position of prey (stage 1)
-%     rostT = [prey_pos(j)+rost1(n,1) rost1(n,2:3)];
-%     comT  = [prey_pos(j)+com1(n,1)  com1(n,2:3)];
-%     tailT = [prey_pos(j)+tail1(n,1) tail1(n,2:3)];
-%     
-%     % Tranformed position of prey (stage 2)
-%     rostT2 = [prey_pos(j)+rost2(n,1) rost2(n,2:3)];
-%     comT2  = [prey_pos(j)+com2(n,1)  com2(n,2:3)];
-%     tailT2 = [prey_pos(j)+tail2(n,1) tail2(n,2:3)];
-%     
+   
     % Returns coordinates for prey body in global FOR
     [pXg,pYg,pZg] = prey_global([0 0 0.025],[0 0 0],[max(pX(:)) 0 0],pX,pY,pZ);
-%     
-    
-    
-    
-    
+
+    % Loop thru speeds
     for i = 2
         
         % Choose index for sequences that have stage 2 data
@@ -812,12 +798,6 @@ if do_localflow
             end
             
             view([-90 90])
-                
-%             set(h_prey1,'FaceLighting','gouraud',...
-%                 'LineStyle','none',...
-%                 'BackFaceLighting','reverselit',...
-%                 'FaceColor',preyColor,...
-%                 'AmbientStrength',.5);
             hold off
             
         end

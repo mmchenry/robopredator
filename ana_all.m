@@ -19,6 +19,9 @@ do_directioncue = 0;
 % (visualizes results of do_directioncue)
 vis_directcue = 0;
 
+% Compares the direction of flow to direction of behavior in local FOR
+do_directioncue_local = 0;
+
 % Descriptive stats of directional response
 do_direction = 0;
 
@@ -39,7 +42,7 @@ vis_seqs = 0;
 do_localflow = 0;
 
 % Visualze flow wrt body of the larvae 2D
-do_localflow2D = 1;
+do_localflow2D = 0;
 
 % Visualize position of responses from above and side for all three speeds
 do_position = 0;
@@ -737,6 +740,18 @@ if vis_directcue
     xlabel('el of velocity at COM (ventral)')
     ylabel('el of response')
     
+    figure
+    
+    inc{1} = index{1} & ~r.wrong;
+    inc{2} = index{2} & ~r.wrong;
+    inc{3} = index{3} & ~r.wrong;
+    
+    
+    scatter_plot(abs(r.th_pred),r.th_meas,inc)
+    
+    xlabel('az of velocity at COM')
+    ylabel('az of response ')
+    
 end
 
 
@@ -934,7 +949,7 @@ end % do_bodycue
 if vis_rose_global
     
     % Index for speed
-    i = 3;
+    i = 2;
     
     % Choose index for sequences that have stage 2 data
     idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
@@ -944,12 +959,15 @@ if vis_rose_global
     [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
         i_wrong,prey_dir] = give_points(b,idx,latency,spds(i)); 
 
-    % Azimuth of responses
-    [az,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,2)-com1(:,2));
-    
-    % Elevation of responses
-    [el,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,3)-com1(:,3));
+     % Azimuth of responses
+     [az,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,2)-com1(:,2));
+     
+     % Elevation of responses
+     [el,rad] = cart2pol(com2(:,1)-com1(:,1),com2(:,3)-com1(:,3));
 
+%    % Direction of response
+%    [az,el,rad] = cart2sph(com2(:,1)-com1(:,1),com2(:,2)-com1(:,2),com2(:,3)-com1(:,3));
+    
     % Flip sign of azimuth for lateral positions, if negative y coordinate
     iFlip = (com1(:,2)<0) & (abs(com1(:,2)) > lat_pos);
     az(iFlip) = -az(iFlip);
@@ -976,8 +994,7 @@ if vis_rose_global
     
     subplot(2,2,4)
     rose_plot(el(iVent),i_wrong(iVent),num_bin)
-    title(['Elevation (ventral) ' num2str(spds(i)) ' cm/s'])
-    
+    title(['Elevation (ventral) ' num2str(spds(i)) ' cm/s'])    
     
 end % vis_rose_local
 
@@ -1577,6 +1594,482 @@ if do_localflow2D
 end % do_localflow2D
 
 
+%% Analyze directional cue in local FOR (do_directioncue_local)
+
+
+if do_directioncue_local
+    
+    % Number of points along the x-axis of the body
+    num_xpts = 20;
+    
+    % Range of points along x-axis of body (in body lengths)
+    x_rangeL = [-.5 1.5];
+    
+    % Range of points along y-axis of body (in body lengths)
+    y_rangeL = [-0.5 0.5];
+    
+    % Range of points along the z-axis of body (in body lengths)
+    z_rangeL = [-.5 .5];
+    
+    % Initialize structure
+    ang.spd         = [];
+    ang.com0        = [];
+    ang.rost0       = [];
+    ang.tail0       = [];
+    ang.flow_ang    = [];
+    ang.behav_ang   = [];
+    ang.wrong       = [];
+    ang.prey_dirL   = [];
+    
+    % Loop thru speeds
+    for i = 1:3
+        
+        % Load CFD data in 'cR' structure
+        load(cfd_path{i})
+        
+        % Choose index for sequences that have stage 2 data
+        idx = index{i} & ~isnan(b.preyx2(:,2)) & b.preyx(:,1)>0  ...
+            & b.preyx(:,2)>0  & b.preyx(:,3)>0;
+        
+        % Sequence numbers
+        seqs = find(idx);
+        
+        % Get body points for all sequences in current speed
+        [rost0,com0,tail0,rost1,com1,tail1,rost2,com2,tail2,i_vent,...
+            i_wrong,prey_dir] = give_points(b,idx,latency,spds(i));
+        
+        % Index of individuals positioned ventral to predator
+        i_vent = com0(:,3)<=0;
+        
+        %calculate dist from mildline at t1 and t2
+        dist1 = (com1(:,2).^2 + com1(:,3).^2).^0.5;
+        dist2 = (com2(:,2).^2 + com2(:,3).^2).^0.5;
+        
+        %those going in wrong direction have smaller d2
+        i_wrong = dist2 < dist1;
+        
+        clear dist1 dist2
+        
+        
+        % Step thru each sequence for current speed
+        for j = 1:length(seqs);
+            
+            % Body length of prey
+            blength = norm([tail0(j,1)-rost0(j,1) ...
+                tail0(j,2)-rost0(j,2) ...
+                tail0(j,3)-rost0(j,3)]);
+            
+            % Range of volume to interrogate
+            rangeX   = [com0(j,1)-blength*sclfactr_bod ...
+                com0(j,1)+blength*sclfactr_bod];
+            rangeY   = [com0(j,2)-blength*sclfactr_bod ...
+                com0(j,2)+blength*sclfactr_bod];
+            rangeZ   = [com0(j,3)-blength*sclfactr_bod ...
+                com0(j,3)+blength*sclfactr_bod];
+            subRange = [rangeX(1) rangeX(2) ...
+                rangeY(1) rangeY(2) ...
+                rangeZ(1) rangeZ(2)];
+            
+            % Reduce flow field to small volume
+            [xS,yS,zS,uS]   = subvolume(cR.x,cR.y,cR.z,cR.u,subRange);
+            [xS,yS,zS,vS]   = subvolume(cR.x,cR.y,cR.z,cR.v,subRange);
+            [xS,yS,zS,wS]   = subvolume(cR.x,cR.y,cR.z,cR.w,subRange);
+            
+            clear rangeX rangeY rangeZ subRange
+            
+            % Define points for the frontal plane of the body
+            x_valsF = linspace(blength*x_rangeL(1),...
+                blength*x_rangeL(2),...
+                num_xpts)';
+            y_valsF = [blength*y_rangeL(1):...
+                mean(diff(x_valsF)):...
+                blength*y_rangeL(2)]';
+            
+            % Meshgrid the frontal plane coordinates
+            [x2F,y2F,z2F] = meshgrid(x_valsF,y_valsF,0);
+            
+            % Transform coordinates from local to global systems
+            [xptsF,yptsF,zptsF] = local_to_global_matrix(rost0(j,:),...
+                com0(j,:),tail0(j,:),x2F,y2F,z2F);
+            
+            % Interpolate to get flow velocities (frontal plane)
+            gbl_uF   = griddata(xS,yS,zS,uS,xptsF,yptsF,zptsF);
+            gbl_vF   = griddata(xS,yS,zS,vS,xptsF,yptsF,zptsF);
+            gbl_wF   = griddata(xS,yS,zS,wS,xptsF,yptsF,zptsF);
+            
+            % Calculate speed
+            gbl_spdF = sqrt(gbl_uF.^2 + gbl_vF.^2 + gbl_wF.^2);
+            
+            % Transform velocities back to local system
+            [uF,vF,wF] = global_to_local_flow(rost0(j,:),...
+                com0(j,:),tail0(j,:),...
+                xptsF,yptsF,zptsF,...
+                gbl_uF,gbl_vF,gbl_wF);
+            
+            % Angle of velocity wrt body
+%            [az_vel,el_vel,r_vel] = cart2sph(mean(uF(:)),...
+%                                             mean(vF(:)),mean(wF(:)));
+            
+            [az_vel,r_vel] = cart2pol(mean(uF(:)),...
+                                             mean(vF(:)));
+            [el_vel,r_vel] = cart2pol(mean(uF(:)),...
+                                             mean(wF(:)));
+                                         
+            clear gbl_uF gbl_vF gbl_wF
+            clear xptsF yptsF zptsF
+            
+            % Transform fast start direction wrt prey body
+            com2L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com2(j,:));
+            com1L = global_to_local(rost1(j,:),com1(j,:),tail1(j,:),com1(j,:));
+            
+            % Calculate fast start direction from local FOR
+            prey_dirL(:,1) = com2L(:,1) - com1L(:,1);
+            prey_dirL(:,2) = com2L(:,2) - com1L(:,2);
+            prey_dirL(:,3) = com2L(:,3) - com1L(:,3);
+            
+            % Angle of response wrt body
+%             [az_dir,el_dir,r_dir] = cart2sph(prey_dirL(1),...
+%                 prey_dirL(2),prey_dirL(3));
+            [az_dir,r_dir] = cart2pol(prey_dirL(1),prey_dirL(2));
+            [el_dir,r_dir] = cart2pol(prey_dirL(1),prey_dirL(3));
+            
+            ang.spd             = [ang.spd; spds(i)];
+            ang.com0            = [ang.com0; com0(j,:)];
+            ang.rost0           = [ang.rost0; rost0(j,:)];
+            ang.tail0           = [ang.tail0; tail0(j,:)];
+            ang.prey_dirL       = [ang.prey_dirL; prey_dirL];
+            ang.flow_ang        = [ang.flow_ang; [az_vel el_vel]];
+            ang.behav_ang       = [ang.behav_ang; [az_dir el_dir]];
+            ang.wrong           = [ang.wrong; i_wrong(j)];
+            
+            % Report status
+            disp(['Done ' num2str(j) ' of ' num2str(length(seqs))])
+        end
+        
+        
+    end
+    
+    % Save cue analysis data
+    save([root_path filesep 'directioncue_local'],'ang')
+    
+end % do_localflow2D
+
+
+if 1
+    % Load 'ang'
+    load([root_path filesep 'directioncue_local'])
+    
+%     i2   = ang.spd==2;
+%     i11  = ang.spd==11;
+%     i20  = ang.spd==20; 
+%     
+%     figure
+%     subplot(1,2,1)
+%     plot(180/pi.*ang.flow_ang(i2,1),180/pi.*ang.behav_ang(i2,1),'ob',...
+%         180/pi.*ang.flow_ang(i11,1),180/pi.*ang.behav_ang(i11,1),'or',...
+%         180/pi.*ang.flow_ang(i20,1),180/pi.*ang.behav_ang(i20,1),'og')
+%     axis square
+%     grid on
+%     legend('2','11','20')  
+%     xlabel('az of flow (deg)')
+%     ylabel('az of behavior (deg)')
+%     
+%     subplot(1,2,2)
+%     plot(180/pi.*ang.flow_ang(i2,2),180/pi.*ang.behav_ang(i2,2),'ob',...
+%         180/pi.*ang.flow_ang(i11,2),180/pi.*ang.behav_ang(i11,2),'or',...
+%         180/pi.*ang.flow_ang(i20,2),180/pi.*ang.behav_ang(i20,2),'og')
+%     legend('2','11','20')  
+%     grid on
+%     legend('2','11','20')  
+%     xlabel('el of flow (deg)')
+%     ylabel('el of behavior (deg)')
+
+
+    idx1 = ((ang.flow_ang(:,1)>-pi) & (ang.flow_ang(:,1)<=-pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx2 = ((ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx3 = ((ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx4 = ((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi)) & ...
+           (ang.flow_ang(:,2)>0);
+       
+    idx5 = ((ang.flow_ang(:,1)>-pi) & (ang.flow_ang(:,1)<=-pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx6 = ((ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx7 = ((ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx8 = ((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi)) & ...
+           (ang.flow_ang(:,2)<0);
+       
+       
+    figure   
+    subplot(2,2,1)
+    rose_plot([-ang.behav_ang(idx1,1);ang.behav_ang(idx4,1)],...
+              [ang.wrong(idx1);ang.wrong(idx4)],num_bin)
+    title('az: head, ventral')
+          
+    subplot(2,2,2)
+    rose_plot([-ang.behav_ang(idx2,1);ang.behav_ang(idx3,1)],...
+              [ang.wrong(idx2);ang.wrong(idx3)],num_bin)
+    title('az: tail, ventral')
+    
+    subplot(2,2,3)
+    rose_plot([-ang.behav_ang(idx5,1);ang.behav_ang(idx8,1)],...
+              [ang.wrong(idx5);ang.wrong(idx8)],num_bin)
+    title('az: head, dorsal')
+          
+    subplot(2,2,4)
+    rose_plot([-ang.behav_ang(idx6,1);ang.behav_ang(idx7,1)],...
+              [ang.wrong(idx6);ang.wrong(idx7)],num_bin)
+    title('az: tail, dorsal')      
+          
+   figure   
+    subplot(2,2,1)
+    rose_plot([ang.behav_ang(idx1,2);ang.behav_ang(idx4,2)],...
+              [ang.wrong(idx1);ang.wrong(idx4)],num_bin)
+    title('el: head, ventral')
+    
+    subplot(2,2,2)
+    rose_plot([ang.behav_ang(idx2,2);ang.behav_ang(idx3,2)],...
+              [ang.wrong(idx2);ang.wrong(idx3)],num_bin)
+    title('el: tail, ventral')
+    
+    subplot(2,2,3)
+    rose_plot([ang.behav_ang(idx5,2);ang.behav_ang(idx8,2)],...
+              [ang.wrong(idx5);ang.wrong(idx8)],num_bin)
+    title('el: head, dorsal')
+    
+    subplot(2,2,4)
+    rose_plot([ang.behav_ang(idx6,2);ang.behav_ang(idx7,2)],...
+              [ang.wrong(idx6);ang.wrong(idx7)],num_bin)
+    title('el: tail, dorsal') 
+    
+    return
+    
+    
+    figure
+    subplot(2,2,1)
+    plot3([ang.prey_dirL(idx1,1);ang.prey_dirL(idx4,1)],...
+          [ang.prey_dirL(idx1,2);ang.prey_dirL(idx4,2)],...
+          [ang.prey_dirL(idx1,3);ang.prey_dirL(idx4,3)],'o')
+      
+    title('el: head, ventral')
+    
+    subplot(2,2,2)
+    rose_plot([ang.behav_ang(idx2,2);ang.behav_ang(idx3,2)],...
+              [ang.wrong(idx2);ang.wrong(idx3)],num_bin)
+    title('el: tail, ventral')
+    
+    subplot(2,2,3)
+    rose_plot([ang.behav_ang(idx5,2);ang.behav_ang(idx8,2)],...
+              [ang.wrong(idx5);ang.wrong(idx8)],num_bin)
+    title('el: head, dorsal')
+    
+    subplot(2,2,4)
+    rose_plot([ang.behav_ang(idx6,2);ang.behav_ang(idx7,2)],...
+              [ang.wrong(idx6);ang.wrong(idx7)],num_bin)
+    title('el: tail, dorsal') 
+    
+          return
+    figure;
+    subplot(1,2,1)
+    rose_plot([-ang.behav_ang(idx1,1);ang.behav_ang(idx4,1);...
+               -ang.behav_ang(idx5,1);ang.behav_ang(idx8,1)],...
+              [ang.wrong(idx1);ang.wrong(idx4);...
+               ang.wrong(idx5);ang.wrong(idx8)],num_bin)
+    
+    subplot(1,2,2)
+    rose_plot([-ang.behav_ang(idx2,1);ang.behav_ang(idx3,1); ...
+               -ang.behav_ang(idx6,1);ang.behav_ang(idx7,1)], ...
+              [ang.wrong(idx2);ang.wrong(idx3);...
+               ang.wrong(idx6);ang.wrong(idx7)],num_bin)
+          
+%     figure;
+%     
+%     subplot(1,2,1)
+%     plot([-ang.behav_ang(idx1,1);ang.behav_ang(idx4,1)],...
+%          [ ang.behav_ang(idx1,2);ang.behav_ang(idx4,2)],'ro',...
+%          [-ang.behav_ang(idx2,1);ang.behav_ang(idx3,1)],...
+%          [ ang.behav_ang(idx2,2);ang.behav_ang(idx3,2)],'bo')
+%     subplot(1,2,2)
+%     plot([-ang.behav_ang(idx5,1);ang.behav_ang(idx8,1)],...
+%          [ ang.behav_ang(idx5,2);ang.behav_ang(idx8,2)],'ro',...
+%          [-ang.behav_ang(idx6,1);ang.behav_ang(idx7,1)],...
+%          [ ang.behav_ang(idx6,2);ang.behav_ang(idx7,2)],'bo')
+          
+          return
+          
+    figure
+    
+    
+    idx1 = ((ang.flow_ang(:,1)>-pi) & (ang.flow_ang(:,1)<=-pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx2 = ((ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx3 = ((ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx4 = ((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi)) & ...
+           (ang.flow_ang(:,2)>0);
+    
+
+    subplot(2,2,1)
+    rose_plot([ang.behav_ang(idx1,2);ang.behav_ang(idx4,2)],...
+              [ang.wrong(idx1);ang.wrong(idx4,1)],num_bin)
+    
+    subplot(2,2,2)
+    rose_plot([ang.behav_ang(idx2,2);ang.behav_ang(idx3,2)],...
+              [ang.wrong(idx2);ang.wrong(idx3,1)],num_bin)
+
+    idx1 = ((ang.flow_ang(:,1)>-pi) & (ang.flow_ang(:,1)<=-pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx2 = ((ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx3 = ((ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx4 = ((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi)) & ...
+           (ang.flow_ang(:,2)<0);
+       
+    subplot(2,2,3)
+    rose_plot([ang.behav_ang(idx1,2);ang.behav_ang(idx4,2)],...
+              [ang.wrong(idx1);ang.wrong(idx4,1)],num_bin)
+    
+    subplot(2,2,4)
+    rose_plot([ang.behav_ang(idx2,2);ang.behav_ang(idx3,2)],...
+              [ang.wrong(idx2);ang.wrong(idx3,1)],num_bin)
+    
+    
+
+return
+
+    
+    
+    idx1 = (ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2);
+    idx2 = (ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi);
+    idx3 = (ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2);
+    idx4 = (ang.flow_ang(:,1)<-pi/2) & (ang.flow_ang(:,1)>=-pi);
+    
+    figure;
+    subplot(2,2,1)
+    rose_plot(ang.behav_ang(idx1,1),ang.wrong(idx1),num_bin)
+    
+    subplot(2,2,2)
+    rose_plot(ang.behav_ang(idx2,1),ang.wrong(idx2),num_bin)
+    
+    subplot(2,2,3)
+    rose_plot(ang.behav_ang(idx3,1),ang.wrong(idx3),num_bin)
+    
+    subplot(2,2,4)
+    rose_plot(ang.behav_ang(idx4,1),ang.wrong(idx4),num_bin)
+    
+    
+    
+    idx1 = (ang.flow_ang(:,2)>0) & (ang.flow_ang(:,2)<=pi/2);
+    idx2 = (ang.flow_ang(:,2)>pi/2) & (ang.flow_ang(:,2)<=pi);
+    idx3 = (ang.flow_ang(:,2)<0) & (ang.flow_ang(:,2)>=-pi/2);
+    idx4 = (ang.flow_ang(:,2)<-pi/2) & (ang.flow_ang(:,2)>=-pi);
+    
+    
+    figure;
+    subplot(2,2,1)
+    rose_plot(ang.behav_ang(idx1,2),ang.wrong(idx1),num_bin)
+    
+    subplot(2,2,2)
+    rose_plot(ang.behav_ang(idx2,2),ang.wrong(idx2),num_bin)
+    
+    subplot(2,2,3)
+    rose_plot(ang.behav_ang(idx3,2),ang.wrong(idx3),num_bin)
+    
+    subplot(2,2,4)
+    rose_plot(ang.behav_ang(idx4,2),ang.wrong(idx4),num_bin)
+    
+    
+   
+    
+    idx1 = ((ang.flow_ang(:,1)>-pi/2) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx2 = (((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1))<=pi) | ...
+            ((ang.flow_ang(:,1)<-pi/2) & (ang.flow_ang(:,1))>=-pi)) & ...
+           (ang.flow_ang(:,2)>0);
+    idx3 = ((ang.flow_ang(:,1)>-pi/2) & (ang.flow_ang(:,1)<=pi/2)) & ...
+           (ang.flow_ang(:,2)<0);
+    idx4 = (((ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1))<=pi) | ...
+            ((ang.flow_ang(:,1)<-pi/2) & (ang.flow_ang(:,1))>=-pi)) & ...
+           (ang.flow_ang(:,2)<0);
+    
+       
+    figure;
+    subplot(2,2,1)
+    rose_plot(ang.behav_ang(idx1,1),ang.wrong(idx1),num_bin)
+    
+    subplot(2,2,2)
+    rose_plot(ang.behav_ang(idx2,1),ang.wrong(idx2),num_bin)
+    
+    subplot(2,2,3)
+    rose_plot(ang.behav_ang(idx3,1),ang.wrong(idx3),num_bin)
+    
+    subplot(2,2,4)
+    rose_plot(ang.behav_ang(idx4,1),ang.wrong(idx4),num_bin)
+    
+    
+    return
+       
+       
+    figure;
+    subplot(2,2,1)
+    rose_plot(ang.behav_ang(idx1,2),ang.wrong(idx1),num_bin)
+    
+    subplot(2,2,2)
+    rose_plot(ang.behav_ang(idx2,2),ang.wrong(idx2),num_bin)
+    
+    subplot(2,2,3)
+    rose_plot(ang.behav_ang(idx3,2),ang.wrong(idx3),num_bin)
+    
+    subplot(2,2,4)
+    rose_plot(ang.behav_ang(idx4,2),ang.wrong(idx4),num_bin)
+    
+    figure
+    plot(ang.behav_ang(idx1,1),ang.behav_ang(idx1,2),'ob',...
+         ang.behav_ang(idx2,1),ang.behav_ang(idx2,2),'or',...
+         ang.behav_ang(idx3,1),ang.behav_ang(idx3,2),'og',...
+         ang.behav_ang(idx4,1),ang.behav_ang(idx4,2),'om')
+       
+    
+    
+    % Separated by speed
+    for i = 1:3
+        
+        idx1 = (ang.spd==spds(i)) & (ang.flow_ang(:,1)>0) & (ang.flow_ang(:,1)<=pi/2);
+        idx2 = (ang.spd==spds(i)) & (ang.flow_ang(:,1)>pi/2) & (ang.flow_ang(:,1)<=pi);
+        idx3 = (ang.spd==spds(i)) & (ang.flow_ang(:,1)<0) & (ang.flow_ang(:,1)>=-pi/2);
+        idx4 = (ang.spd==spds(i)) & (ang.flow_ang(:,1)<-pi/2) & (ang.flow_ang(:,1)>=-pi);
+        
+        wrong = zeros(length(idx1),1);
+        
+        figure;
+        subplot(2,2,1)
+        rose_plot(ang.behav_ang(idx1,1),wrong(idx1),num_bin)
+        
+        subplot(2,2,2)
+        rose_plot(ang.behav_ang(idx2,1),wrong(idx2),num_bin)
+        
+        subplot(2,2,3)
+        rose_plot(ang.behav_ang(idx3,1),wrong(idx3),num_bin)
+        
+        subplot(2,2,4)
+        rose_plot(ang.behav_ang(idx4,1),wrong(idx4),num_bin)
+        
+        
+    end
+    
+    figure
+    plot3(180/pi.*ang.flow{1}(:,1),180/pi.*ang.flow{1}(:,2),180/pi.*ang.behav{1}(:,1),'ob',...
+          180/pi.*ang.flow{2}(:,1),180/pi.*ang.flow{2}(:,2),180/pi.*ang.behav{2}(:,1),'or',...
+          180/pi.*ang.flow{3}(:,1),180/pi.*ang.flow{3}(:,2),180/pi.*ang.behav{3}(:,1),'og')
+end
+
+
 %% Plot 3D spatial distibution of responders (do_3D)
 
 if do_position  
@@ -1651,6 +2144,8 @@ end
 
 function rose_plot(az,wrong,num_bin)
     
+wrong = logical(wrong);
+
 % Rose plot in correct direction
 h = rose(az(~wrong),num_bin);
 set(h,'Color','g')
